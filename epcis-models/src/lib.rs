@@ -1,0 +1,26 @@
+//! Native Rust implementation of the GS1 EPCIS 2.0 Core Event Models.
+
+#![deny(missing_docs)]
+#![deny(unsafe_code)]
+#![warn(clippy::pedantic)]
+#![allow(clippy::module_name_repetitions)]
+
+pub mod cbv;
+pub mod types;
+pub mod events;
+pub mod document;
+
+// Re-export common types at crate level for convenient usage
+pub use cbv::{BizStep, Disposition, StandardBizStep, StandardDisposition};
+pub use types::{
+    Action, BizLocation, BizTransaction, Destination, Epc, ErrorDeclaration, QuantityElement,
+    ReadPoint, SensorElement, SensorMetadata, SensorReport, Source,
+};
+pub use events::{
+    EPCISEvent, ObjectEvent, AggregationEvent, TransformationEvent, AssociationEvent,
+    TransactionEvent, PersistentDisposition,
+};
+pub use document::{
+    EPCISDocument, EPCISBody, EPCISHeader, EPCISMasterData, VocabularyElement,
+    VocabularyElementList, VocabularyAttribute,
+};

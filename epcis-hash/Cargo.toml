@@ -1,0 +1,17 @@
+[package]
+name = "epcis-hash"
+version = "0.1.0"
+edition = "2024"
+authors = ["Antigravity <antigravity@gemini.google.com>"]
+description = "Deterministic SHA-256 canonical hashing implementation for GS1 EPCIS 2.0 events."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+epcis-models = { path = "../epcis-models" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+sha2 = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+epcis-translate = { path = "../epcis-translate" }
