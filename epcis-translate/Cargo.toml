@@ -5,7 +5,13 @@ edition = "2024"
 authors = ["Antigravity <antigravity@gemini.google.com>"]
 description = "Zero-allocation bidirectional translators for GS1 identifiers (SGTIN, SSCC, SGLN, GIAI, GRAI)."
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/MATANGAresearch/epcis-sdk"
+documentation = "https://docs.rs/epcis-translate"
+readme = "README.md"
+keywords = ["epcis", "gs1", "urn", "digital-link", "sgtin"]
+categories = ["parser-implementations", "encoding"]
 
 [dependencies]
-epcis-models = { path = "../epcis-models" }
+epcis-models = { version = "0.1.0", path = "../epcis-models" }
 serde = { version = "1.0", features = ["derive"] }
+
