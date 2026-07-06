@@ -20,9 +20,9 @@ Add the crates to your `Cargo.toml` dependencies:
 
 ```toml
 [dependencies]
-epcis-models = "0.1.0"
-epcis-hash = "0.1.0"
-epcis-translate = "0.1.0"
+epcis-models = "0.1.1"
+epcis-hash = "0.1.1"
+epcis-translate = "0.1.1"
 ```
 
 ### Complete Example
@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut event = ObjectEvent::new(event_time, "+00:00".to_string(), Action::Observe);
     event.biz_step = Some(BizStep::Standard(StandardBizStep::Receiving));
     event.disposition = Some(Disposition::Standard(StandardDisposition::InTransit));
-    event.epc_list = Some(vec![Epc::from(epc_urn)]);
+    event.epc_list = Some(vec![Epc::try_from(epc_urn.as_str())?]);
 
     // 3. Compute deterministic canonical hash ID
     let event_enum = EPCISEvent::ObjectEvent(event);
