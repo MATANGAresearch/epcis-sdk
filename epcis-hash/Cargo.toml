@@ -1,12 +1,12 @@
 [package]
 name = "epcis-hash"
-version = "0.1.0"
-edition = "2024"
-rust-version = "1.85"
-authors = ["Duma Mtungwa <duma@matangaresearch.com>"]
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 description = "Deterministic SHA-256 canonical hashing implementation for GS1 EPCIS 2.0 events."
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/MATANGAresearch/epcis-sdk"
 documentation = "https://docs.rs/epcis-hash"
 readme = "README.md"
 keywords = ["epcis", "gs1", "hash", "sha256", "canonicalization"]

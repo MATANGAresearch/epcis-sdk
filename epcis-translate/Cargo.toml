@@ -1,12 +1,12 @@
 [package]
 name = "epcis-translate"
-version = "0.1.0"
-edition = "2024"
-rust-version = "1.85"
-authors = ["Duma Mtungwa <duma@matangaresearch.com>"]
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 description = "Zero-allocation bidirectional translators for GS1 identifiers (SGTIN, SSCC, SGLN, GIAI, GRAI)."
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/MATANGAresearch/epcis-sdk"
 documentation = "https://docs.rs/epcis-translate"
 readme = "README.md"
 keywords = ["epcis", "gs1", "urn", "digital-link", "sgtin"]

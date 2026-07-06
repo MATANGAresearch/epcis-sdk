@@ -1,12 +1,12 @@
 [package]
 name = "epcis-models"
-version = "0.1.0"
-edition = "2024"
-rust-version = "1.85"
-authors = ["Duma Mtungwa <duma@matangaresearch.com>"]
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
 description = "Type-safe GS1 EPCIS 2.0 event models implemented natively in Rust."
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/MATANGAresearch/epcis-sdk"
 documentation = "https://docs.rs/epcis-models"
 readme = "README.md"
 keywords = ["epcis", "gs1", "tracking", "supply-chain", "serialization"]

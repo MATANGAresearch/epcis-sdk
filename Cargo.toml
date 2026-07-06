@@ -6,6 +6,14 @@ members = [
     "epcis-translate",
 ]
 
+[workspace.package]
+version = "0.1.1"
+rust-version = "1.96.1"
+authors = ["Duma Mtungwa <duma@matangaresearch.com>"]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/MATANGAresearch/epcis-sdk"
+
 [workspace.dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.150", features = ["preserve_order"] }
@@ -18,5 +26,5 @@ sha2 = { version = "0.11.0" }
 quick-xml = { version = "0.41.0", features = ["serialize"] }
 regex = { version = "1.12.4" }
 thiserror = { version = "2.0.18" }
-epcis-models = { path = "./epcis-models", version = "0.1.0" }
-epcis-translate = { path = "./epcis-translate", version = "0.1.0" }
+epcis-models = { path = "./epcis-models", version = "0.1.1" }
+epcis-translate = { path = "./epcis-translate", version = "0.1.1" }
