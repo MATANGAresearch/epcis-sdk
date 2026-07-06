@@ -7,20 +7,36 @@
 
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use std::borrow::Cow;
+use crate::error::EpcisModelError;
 
 /// Newtype representing an Electronic Product Code (EPC) URN.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Epc(pub String);
+pub struct Epc(pub Cow<'static, str>);
 
 impl From<String> for Epc {
     fn from(s: String) -> Self {
+        Epc(Cow::Owned(s))
+    }
+}
+
+impl From<Cow<'static, str>> for Epc {
+    fn from(s: Cow<'static, str>) -> Self {
         Epc(s)
     }
 }
 
-impl From<&str> for Epc {
-    fn from(s: &str) -> Self {
-        Epc(s.to_string())
+impl TryFrom<&str> for Epc {
+    type Error = EpcisModelError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        if s.is_empty() {
+            return Err(EpcisModelError::InvalidEpc("EPC URN cannot be empty".to_string()));
+        }
+        if !s.starts_with("urn:epc:") && !s.starts_with("http://") && !s.starts_with("https://") {
+            return Err(EpcisModelError::InvalidEpc(format!("EPC URN must start with URN or HTTP scheme: {s}")));
+        }
+        Ok(Epc(Cow::Owned(s.to_string())))
     }
 }
 
@@ -43,22 +59,66 @@ pub enum Action {
     Delete,
 }
 
+/// Type-safe identifier wrapper for ReadPoint.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ReadPointId(pub Cow<'static, str>);
+
+impl From<&'static str> for ReadPointId {
+    fn from(s: &'static str) -> Self {
+        ReadPointId(Cow::Borrowed(s))
+    }
+}
+
+impl From<String> for ReadPointId {
+    fn from(s: String) -> Self {
+        ReadPointId(Cow::Owned(s))
+    }
+}
+
+impl std::fmt::Display for ReadPointId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// The physical location where the event took place.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ReadPoint {
     /// Unique identifier of the read point
-    pub id: String,
+    pub id: ReadPointId,
 }
 
-impl From<&str> for ReadPoint {
-    fn from(id: &str) -> Self {
-        ReadPoint { id: id.to_string() }
+impl From<&'static str> for ReadPoint {
+    fn from(id: &'static str) -> Self {
+        ReadPoint { id: ReadPointId::from(id) }
     }
 }
 
 impl From<String> for ReadPoint {
     fn from(id: String) -> Self {
-        ReadPoint { id }
+        ReadPoint { id: ReadPointId::from(id) }
+    }
+}
+
+/// Type-safe identifier wrapper for BizLocation.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct BizLocationId(pub Cow<'static, str>);
+
+impl From<&'static str> for BizLocationId {
+    fn from(s: &'static str) -> Self {
+        BizLocationId(Cow::Borrowed(s))
+    }
+}
+
+impl From<String> for BizLocationId {
+    fn from(s: String) -> Self {
+        BizLocationId(Cow::Owned(s))
+    }
+}
+
+impl std::fmt::Display for BizLocationId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -66,18 +126,18 @@ impl From<String> for ReadPoint {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BizLocation {
     /// Unique identifier of the business location
-    pub id: String,
+    pub id: BizLocationId,
 }
 
-impl From<&str> for BizLocation {
-    fn from(id: &str) -> Self {
-        BizLocation { id: id.to_string() }
+impl From<&'static str> for BizLocation {
+    fn from(id: &'static str) -> Self {
+        BizLocation { id: BizLocationId::from(id) }
     }
 }
 
 impl From<String> for BizLocation {
     fn from(id: String) -> Self {
-        BizLocation { id }
+        BizLocation { id: BizLocationId::from(id) }
     }
 }
 

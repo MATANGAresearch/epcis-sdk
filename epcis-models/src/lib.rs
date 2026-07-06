@@ -9,8 +9,10 @@ pub mod cbv;
 pub mod types;
 pub mod events;
 pub mod document;
+pub mod error;
 
 // Re-export common types at crate level for convenient usage
+pub use error::EpcisModelError;
 pub use cbv::{BizStep, Disposition, StandardBizStep, StandardDisposition};
 pub use types::{
     Action, BizLocation, BizTransaction, Destination, Epc, ErrorDeclaration, QuantityElement,

@@ -2,7 +2,8 @@
 name = "epcis-hash"
 version = "0.1.0"
 edition = "2024"
-authors = ["Antigravity <antigravity@gemini.google.com>"]
+rust-version = "1.85"
+authors = ["Duma Mtungwa <duma@matangaresearch.com>"]
 description = "Deterministic SHA-256 canonical hashing implementation for GS1 EPCIS 2.0 events."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/MATANGAresearch/epcis-sdk"
@@ -12,12 +13,14 @@ keywords = ["epcis", "gs1", "hash", "sha256", "canonicalization"]
 categories = ["encoding", "cryptography"]
 
 [dependencies]
-epcis-models = { version = "0.1.0", path = "../epcis-models" }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0", features = ["preserve_order"] }
-sha2 = "0.10"
-chrono = { version = "0.4", features = ["serde"] }
+epcis-models = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+chrono = { workspace = true }
+quick-xml = { workspace = true }
+regex = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
-epcis-translate = { version = "0.1.0", path = "../epcis-translate" }
-
+epcis-translate = { workspace = true }
