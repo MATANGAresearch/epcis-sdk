@@ -7,9 +7,9 @@ license.workspace = true
 description = "Command line interface for EPCIS event hashing and identifier translation"
 
 [dependencies]
-epcis-models = { path = "../epcis-models" }
-epcis-hash = { path = "../epcis-hash" }
-epcis-translate = { path = "../epcis-translate" }
+epcis-models = { path = "../epcis-models", version = "0.1.3" }
+epcis-hash = { path = "../epcis-hash", version = "0.1.3" }
+epcis-translate = { path = "../epcis-translate", version = "0.1.3" }
 clap = { version = "4.6.1", features = ["derive"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
