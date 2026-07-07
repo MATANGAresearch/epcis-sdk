@@ -4,6 +4,7 @@ members = [
     "epcis-models",
     "epcis-hash",
     "epcis-translate",
+    "epcis-cli",
 ]
 
 [workspace.package]

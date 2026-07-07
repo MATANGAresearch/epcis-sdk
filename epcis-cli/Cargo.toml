@@ -1,0 +1,16 @@
+[package]
+name = "epcis-cli"
+version = "0.1.2"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Command line interface for EPCIS event hashing and identifier translation"
+
+[dependencies]
+epcis-models = { path = "../epcis-models" }
+epcis-hash = { path = "../epcis-hash" }
+epcis-translate = { path = "../epcis-translate" }
+clap = { version = "4.5.31", features = ["derive"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

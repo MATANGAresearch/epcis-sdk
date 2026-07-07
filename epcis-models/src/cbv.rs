@@ -1,7 +1,7 @@
 //! Core Business Vocabulary (CBV) standard enums and helper representations.
 
 use std::str::FromStr;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use strum_macros::{Display, EnumString, AsRefStr};
 
 /// Standard business step (bizStep) values as defined by GS1 CBV.
@@ -143,9 +143,9 @@ impl Serialize for BizStep {
 impl<'de> Deserialize<'de> for BizStep {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
+        D: serde::Deserializer<'de>,
     {
-        let s = String::deserialize(deserializer)?;
+        let s = crate::document::deserialize_string_or_map_text(deserializer)?;
         Ok(BizStep::from_str(&s).unwrap())
     }
 }
@@ -274,9 +274,9 @@ impl Serialize for Disposition {
 impl<'de> Deserialize<'de> for Disposition {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
+        D: serde::Deserializer<'de>,
     {
-        let s = String::deserialize(deserializer)?;
+        let s = crate::document::deserialize_string_or_map_text(deserializer)?;
         Ok(Disposition::from_str(&s).unwrap())
     }
 }

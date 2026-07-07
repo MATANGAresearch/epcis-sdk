@@ -70,7 +70,7 @@ impl std::fmt::Display for Epc {
 /// let action = Action::Observe;
 /// assert_eq!(action, Action::Observe);
 /// ```
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Action {
     /// Add action
@@ -79,6 +79,24 @@ pub enum Action {
     Observe,
     /// Delete action
     Delete,
+}
+
+impl<'de> Deserialize<'de> for Action {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = crate::document::deserialize_string_or_map_text(deserializer)?;
+        match s.as_str() {
+            "ADD" => Ok(Action::Add),
+            "OBSERVE" => Ok(Action::Observe),
+            "DELETE" => Ok(Action::Delete),
+            other => Err(serde::de::Error::custom(format!(
+                "invalid action: {}, expected ADD, OBSERVE, or DELETE",
+                other
+            ))),
+        }
+    }
 }
 
 /// Type-safe identifier wrapper for ReadPoint.

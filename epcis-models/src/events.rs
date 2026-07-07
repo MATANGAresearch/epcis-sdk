@@ -44,11 +44,12 @@ pub struct PersistentDisposition {
 #[serde(rename_all = "camelCase")]
 pub struct ObjectEvent {
     /// Date and time when the event occurred
+    #[serde(with = "crate::document::datetime_serde")]
     pub event_time: DateTime<Utc>,
     /// Timezone offset (e.g. "+01:00")
     pub event_time_zone_offset: String,
     /// Record timestamp (optional, set by repository)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "crate::document::opt_datetime_serde", skip_serializing_if = "Option::is_none")]
     pub record_time: Option<DateTime<Utc>>,
     /// Event identifier (often URN like urn:uuid)
     #[serde(rename = "eventID", skip_serializing_if = "Option::is_none")]
@@ -152,11 +153,12 @@ impl ObjectEvent {
 #[serde(rename_all = "camelCase")]
 pub struct AggregationEvent {
     /// Date and time when the event occurred
+    #[serde(with = "crate::document::datetime_serde")]
     pub event_time: DateTime<Utc>,
     /// Timezone offset
     pub event_time_zone_offset: String,
     /// Record timestamp (optional)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "crate::document::opt_datetime_serde", skip_serializing_if = "Option::is_none")]
     pub record_time: Option<DateTime<Utc>>,
     /// Event identifier
     #[serde(rename = "eventID", skip_serializing_if = "Option::is_none")]
@@ -259,11 +261,12 @@ impl AggregationEvent {
 #[serde(rename_all = "camelCase")]
 pub struct TransformationEvent {
     /// Date and time when the event occurred
+    #[serde(with = "crate::document::datetime_serde")]
     pub event_time: DateTime<Utc>,
     /// Timezone offset
     pub event_time_zone_offset: String,
     /// Record timestamp
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "crate::document::opt_datetime_serde", skip_serializing_if = "Option::is_none")]
     pub record_time: Option<DateTime<Utc>>,
     /// Event identifier
     #[serde(rename = "eventID", skip_serializing_if = "Option::is_none")]
@@ -351,11 +354,12 @@ impl TransformationEvent {
 #[serde(rename_all = "camelCase")]
 pub struct AssociationEvent {
     /// Date and time when the event occurred
+    #[serde(with = "crate::document::datetime_serde")]
     pub event_time: DateTime<Utc>,
     /// Timezone offset
     pub event_time_zone_offset: String,
     /// Record timestamp
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "crate::document::opt_datetime_serde", skip_serializing_if = "Option::is_none")]
     pub record_time: Option<DateTime<Utc>>,
     /// Event identifier
     #[serde(rename = "eventID", skip_serializing_if = "Option::is_none")]
@@ -438,11 +442,12 @@ impl AssociationEvent {
 #[serde(rename_all = "camelCase")]
 pub struct TransactionEvent {
     /// Date and time when the event occurred
+    #[serde(with = "crate::document::datetime_serde")]
     pub event_time: DateTime<Utc>,
     /// Timezone offset
     pub event_time_zone_offset: String,
     /// Record timestamp
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "crate::document::opt_datetime_serde", skip_serializing_if = "Option::is_none")]
     pub record_time: Option<DateTime<Utc>>,
     /// Event identifier
     #[serde(rename = "eventID", skip_serializing_if = "Option::is_none")]
