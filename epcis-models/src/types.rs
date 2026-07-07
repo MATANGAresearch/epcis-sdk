@@ -301,3 +301,53 @@ pub struct ErrorDeclaration {
     #[serde(rename = "correctiveEventIDs", skip_serializing_if = "Option::is_none")]
     pub corrective_event_ids: Option<Vec<String>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cbv::BizStep;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_epc_validation() {
+        // Valid URN
+        let epc = Epc::try_from("urn:epc:id:sgtin:0614141.107346.2023");
+        assert!(epc.is_ok());
+        assert_eq!(epc.unwrap().to_string(), "urn:epc:id:sgtin:0614141.107346.2023");
+
+        // Valid URI
+        let epc_uri = Epc::try_from("https://id.gs1.org/01/04012345987652/21/12345");
+        assert!(epc_uri.is_ok());
+
+        // Error: Empty
+        let empty = Epc::try_from("");
+        assert!(empty.is_err());
+        assert!(matches!(empty.unwrap_err(), EpcisModelError::InvalidEpc(_)));
+
+        // Error: Invalid scheme
+        let bad_epc = Epc::try_from("bad:scheme:123");
+        assert!(bad_epc.is_err());
+    }
+
+    #[test]
+    fn test_action_deserialization_errors() {
+        // Valid deserializations
+        let observe: Action = serde_json::from_str("\"OBSERVE\"").unwrap();
+        assert_eq!(observe, Action::Observe);
+
+        // Invalid deserialization
+        let err: Result<Action, _> = serde_json::from_str("\"INVALID\"");
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_biz_step_custom_and_standard() {
+        // Standard CBV step parsing
+        let step = BizStep::from_str("urn:epcglobal:cbv:bizstep:receiving").unwrap();
+        assert_eq!(step.as_str(), "urn:epcglobal:cbv:bizstep:receiving");
+
+        // Custom step parsing
+        let custom = BizStep::from_str("https://example.com/custom-bizstep").unwrap();
+        assert_eq!(custom.as_str(), "https://example.com/custom-bizstep");
+    }
+}

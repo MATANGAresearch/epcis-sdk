@@ -567,3 +567,98 @@ fn calculate_check_digit(digits: &str) -> u32 {
         10 - remainder
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sgtin_parse_errors() {
+        // URN Errors
+        assert_eq!(Sgtin::from_urn("urn:epc:id:sscc:4012345.098765.12345"), Err(ParseError::InvalidPrefix));
+        assert_eq!(Sgtin::from_urn("urn:epc:id:sgtin:4012345"), Err(ParseError::MissingField));
+        assert_eq!(Sgtin::from_urn("urn:epc:id:sgtin:4012345.098765.12345.extra"), Err(ParseError::ExtraFields));
+        assert_eq!(Sgtin::from_urn("urn:epc:id:sgtin:4012345..12345"), Err(ParseError::InvalidFormat));
+
+        // Digital Link Errors
+        assert_eq!(Sgtin::from_digital_link("https://id.gs1.org/00/340123450123456784", 7), Err(ParseError::InvalidFormat));
+        assert_eq!(Sgtin::from_digital_link("https://id.gs1.org/01/04012345987652/22/12345", 7), Err(ParseError::InvalidFormat));
+        assert_eq!(Sgtin::from_digital_link("https://id.gs1.org/01/0401234598765/21/12345", 7), Err(ParseError::InvalidFormat)); // length != 14
+        assert_eq!(Sgtin::from_digital_link("https://id.gs1.org/01/04012345987652/21/12345", 14), Err(ParseError::InvalidFormat)); // prefix_len >= 13
+    }
+
+    #[test]
+    fn test_sscc_parse_errors() {
+        // URN Errors
+        assert_eq!(Sscc::from_urn("urn:epc:id:sgtin:4012345.0123456789"), Err(ParseError::InvalidPrefix));
+        assert_eq!(Sscc::from_urn("urn:epc:id:sscc:4012345"), Err(ParseError::MissingField));
+        assert_eq!(Sscc::from_urn("urn:epc:id:sscc:4012345.0123456789.extra"), Err(ParseError::ExtraFields));
+        assert_eq!(Sscc::from_urn("urn:epc:id:sscc:"), Err(ParseError::MissingField));
+
+        // Digital Link Errors
+        assert_eq!(Sscc::from_digital_link("https://id.gs1.org/01/04012345987652/21/12345", 7), Err(ParseError::InvalidFormat));
+        assert_eq!(Sscc::from_digital_link("https://id.gs1.org/00/34012345012345678", 7), Err(ParseError::InvalidFormat)); // length != 18
+        assert_eq!(Sscc::from_digital_link("https://id.gs1.org/00/340123450123456784", 17), Err(ParseError::InvalidFormat)); // prefix_len >= 17
+    }
+
+    #[test]
+    fn test_sgln_parse_errors() {
+        // URN Errors
+        assert_eq!(Sgln::from_urn("urn:epc:id:sscc:4012345.00001.0"), Err(ParseError::InvalidPrefix));
+        assert_eq!(Sgln::from_urn("urn:epc:id:sgln:4012345.00001"), Err(ParseError::MissingField));
+        assert_eq!(Sgln::from_urn("urn:epc:id:sgln:4012345.00001.0.extra"), Err(ParseError::ExtraFields));
+
+        // Digital Link Errors
+        assert_eq!(Sgln::from_digital_link("https://id.gs1.org/415/4012345000016/254/0", 7), Err(ParseError::InvalidFormat));
+        assert_eq!(Sgln::from_digital_link("https://id.gs1.org/414/4012345000016/255/0", 7), Err(ParseError::InvalidFormat));
+        assert_eq!(Sgln::from_digital_link("https://id.gs1.org/414/401234500001/254/0", 7), Err(ParseError::InvalidFormat)); // length != 13
+        assert_eq!(Sgln::from_digital_link("https://id.gs1.org/414/4012345000016/254/0", 12), Err(ParseError::InvalidFormat)); // prefix_len >= 12
+    }
+
+    #[test]
+    fn test_grai_parse_errors() {
+        // URN Errors
+        assert_eq!(Grai::from_urn("urn:epc:id:sscc:4012345.00001.12345"), Err(ParseError::InvalidPrefix));
+        assert_eq!(Grai::from_urn("urn:epc:id:grai:4012345.00001"), Err(ParseError::MissingField));
+        assert_eq!(Grai::from_urn("urn:epc:id:grai:4012345.00001.12345.extra"), Err(ParseError::ExtraFields));
+
+        // Digital Link Errors
+        assert_eq!(Grai::from_digital_link("https://id.gs1.org/8004/0401234500001612345", 7), Err(ParseError::InvalidFormat));
+        assert_eq!(Grai::from_digital_link("https://id.gs1.org/8003/0401234500001", 7), Err(ParseError::InvalidFormat)); // length < 14
+        assert_eq!(Grai::from_digital_link("https://id.gs1.org/8003/0401234500001612345", 12), Err(ParseError::InvalidFormat)); // prefix_len >= 12
+    }
+
+    #[test]
+    fn test_giai_parse_errors() {
+        // URN Errors
+        assert_eq!(Giai::from_urn("urn:epc:id:sscc:4012345.12345"), Err(ParseError::InvalidPrefix));
+        assert_eq!(Giai::from_urn("urn:epc:id:giai:4012345"), Err(ParseError::MissingField));
+        assert_eq!(Giai::from_urn("urn:epc:id:giai:4012345.12345.extra"), Err(ParseError::ExtraFields));
+
+        // Digital Link Errors
+        assert_eq!(Giai::from_digital_link("https://id.gs1.org/8003/401234512345", 7), Err(ParseError::InvalidFormat));
+        assert_eq!(Giai::from_digital_link("https://id.gs1.org/8004/401234512345", 15), Err(ParseError::InvalidFormat)); // prefix_len >= raw_giai.len()
+    }
+
+    #[test]
+    fn test_translation_performance_guard() {
+        use std::time::Instant;
+
+        let urn = "urn:epc:id:sgtin:4012345.098765.12345";
+        let dl = "https://id.gs1.org/01/04012345987652/21/12345";
+        
+        let start = Instant::now();
+        for _ in 0..100_000 {
+            let sgtin = Sgtin::from_urn(urn).unwrap();
+            let _dl_out = sgtin.to_digital_link("https://id.gs1.org");
+            
+            let sgtin_dl = Sgtin::from_digital_link(dl, 7).unwrap();
+            let _urn_out = sgtin_dl.to_urn();
+        }
+        let elapsed = start.elapsed();
+        println!("Translated 100k inputs in: {:?}", elapsed);
+        
+        // Exceedingly high threshold to account for slow CPU environments, 100k roundtrips in 500ms
+        assert!(elapsed.as_millis() < 500, "Performance regression detected! 100k roundtrips took {:?}", elapsed);
+    }
+}
