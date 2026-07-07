@@ -341,7 +341,7 @@ checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
 
 [[package]]
 name = "epcis-cli"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "clap",
  "epcis-hash",
@@ -354,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "epcis-hash"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "chrono",
  "criterion",
@@ -371,7 +371,7 @@ dependencies = [
 
 [[package]]
 name = "epcis-models"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "chrono",
  "quick-xml",
@@ -386,7 +386,7 @@ dependencies = [
 
 [[package]]
 name = "epcis-translate"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "criterion",
  "epcis-models",
