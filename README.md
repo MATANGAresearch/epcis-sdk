@@ -1,33 +1,139 @@
 # GS1 EPCIS 2.0 Rust SDK
 
-A high-performance, native Rust SDK for working with GS1 EPCIS 2.0 events, canonical hashing, and identifier translations. This library is designed to be type-safe, strict, and highly efficient.
+A high-performance, developer-friendly, and native Rust SDK for working with the GS1 EPCIS 2.0 visibility events standard. 
+
+This SDK implements type-safe schema models, deterministic canonical event hashing, and zero-allocation GS1 identifier translations. It is designed to be strict, efficient, and fully interoperable with modern supply chain ledgers and APIs.
+
+---
+
+## What is EPCIS 2.0?
+
+**EPCIS (Electronic Product Code Information Services)** is a global standard (ISO/IEC 19987) for capturing and sharing visibility events across supply chains. It acts as a common language for tracking the physical movement and status of goods.
+
+Every EPCIS event answers the **5 Ws and How**:
+1. **What**: The products or assets involved (expressed via `epcList` or `quantityList` in `epcis-models`).
+2. **When**: The date, time, and timezone offset of the event (`eventTime`, `eventTimeZoneOffset`).
+3. **Where**: The physical location where it occurred (`readPoint`, `bizLocation`).
+4. **Why**: The business context (`bizStep` and `disposition`).
+5. **How (IoT Sensors)**: Standardized sensor readings (e.g. temperature, humidity, coordinate systems) to track environmental conditions during transit.
+
+---
 
 ## Workspace Crates
 
 This workspace consists of three modular crates:
 
-1. **[`epcis-models`](./epcis-models)**: Type-safe event models (`ObjectEvent`, `AggregationEvent`, `TransformationEvent`, etc.) and CBV (Core Business Vocabulary) enum systems.
-2. **[`epcis-hash`](./epcis-hash)**: Deterministic, canonical SHA-256 event hashing implementation conforming to OpenEPCIS and GS1 standards.
-3. **[`epcis-translate`](./epcis-translate)**: Zero-allocation, bidirectional translators for converting GS1 keys (SGTIN, SSCC, SGLN, GRAI, GIAI) between EPC URN and GS1 Digital Link path formats.
+1. **[`epcis-models`](./epcis-models)**: Type-safe event models (`ObjectEvent`, `AggregationEvent`, `TransformationEvent`, etc.) and strum-backed CBV (Core Business Vocabulary) enum systems. Fully serializeable to and from JSON/JSON-LD.
+2. **[`epcis-hash`](./epcis-hash)**: Deterministic, representation-agnostic canonical SHA-256 event hashing conforming to the GS1 and `OpenEPCIS` specification.
+3. **[`epcis-translate`](./epcis-translate)**: Zero-allocation, bidirectional translators for converting GS1 keys (SGTIN, SSCC, SGLN, GRAI, GIAI) between EPC URN and GS1 Digital Link path formats without heap allocation.
 
 ---
 
-## Getting Started
+## Why Hashing & Canonicalization?
 
-### Installation
+In modern supply chain architectures (especially distributed shared ledgers, blockchains, or cloud-native event-sourcing databases), unique and immutable references to events are required:
+* **Tamper Proofing / Notarization**: Saving only the event hash on-chain preserves privacy while proving that the underlying data has not been modified.
+* **Deduplication / Idempotency**: Automatically generating unique event IDs based on their semantic content to prevent duplicate records from ingestion glitches.
+* **Error Declarations**: Referencing the original event’s hash to declare correction events.
 
-Add the crates to your `Cargo.toml` dependencies:
+Because events can be serialized in different ways (differing whitespaces, key ordering, XML vs. JSON-LD, compact URIs vs. bare words), they must first be transformed into a **pre-hash string** using strict canonical rules before hashing.
+
+### Canonical Property Order (CBV 2.0 / 2.1)
+The algorithm concatenates elements in this exact sequence:
+1. `eventType`
+2. `eventTime`
+3. `eventTimeZoneOffset`
+4. `epcList` - `epc` (sorted)
+5. `parentID`
+6. `inputEPCList` - `epc` (sorted)
+7. `childEPCs` - `epc` (sorted)
+8. `quantityList`
+9. `childQuantityList`
+10. `inputQuantityList`
+11. `outputEPCList` - `epc` (sorted)
+12. `outputQuantityList`
+13. `action`
+14. `transformationID`
+15. `bizStep`
+16. `disposition`
+17. `persistentDisposition`
+18. `readPoint` - `id`
+19. `bizLocation` - `id`
+20. `bizTransactionList`
+21. `sourceList`
+22. `destinationList`
+23. `sensorElementList`
+24. `ilmd` (user extensions)
+25. User extensions at event level (sorted namespaces)
+
+---
+
+## Walkthrough: JSON-LD Event to Canonical Hash
+
+Here is an example showing how a raw JSON-LD event payload is canonicalized and hashed by the SDK.
+
+### 1. Raw JSON-LD Input
+```json
+{
+  "@context": [
+    "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld",
+    { "gs1": "https://gs1.org/voc/", "example": "https://ns.example.com/epcis/" }
+  ],
+  "type": "ObjectEvent",
+  "eventTime": "2020-03-04T11:00:30.000+01:00",
+  "eventTimeZoneOffset": "+01:00",
+  "recordTime": "2020-03-04T11:00:30.999+01:00",
+  "epcList": [
+    "urn:epc:id:sscc:4012345.0000000333",
+    "urn:epc:id:sscc:4012345.0000000111",
+    "urn:epc:id:sscc:4012345.0000000222"
+  ],
+  "action": "OBSERVE",
+  "bizStep": "departing",
+  "readPoint": { "id": "urn:epc:id:sgln:4012345.00011.987" },
+  "example:myField1": {
+    "example:mySubField1": "2",
+    "example:mySubField2": "5"
+  }
+}
+```
+
+### 2. Semantic Canonicalization Behavior
+During processing:
+* **Time Conversion**: `eventTime` is converted from localized offset `11:00:30+01:00` to UTC `10:00:30.000Z`.
+* **Metadata Exclusion**: `recordTime` and metadata properties are stripped out.
+* **Lexicographical Sorting**: `epcList` items are sorted alphabetically by their numeric segments (e.g. `111` first, then `222`, then `333`).
+* **Digital Link Conversion**: EPC URNs (like `urn:epc:id:sscc:...`) are parsed and converted to canonical GS1 Digital Link URIs (like `https://id.gs1.org/00/...` with check-digits calculated).
+* **Vocabulary Normalization**: Bare step value `"departing"` is expanded to the official Web URI `"https://ref.gs1.org/cbv/BizStep-departing"`.
+* **Namespace Expansion**: Custom extensions are prefixed with their URI namespaces.
+
+### 3. Intermediate Pre-Hash String
+The canonical string passed to the SHA-256 hasher:
+```text
+eventType=ObjectEventeventTime=2020-03-04T10:00:30.000ZeventTimeZoneOffset=+01:00epcListepc=https://id.gs1.org/00/040123450000001112epc=https://id.gs1.org/00/040123450000002225epc=https://id.gs1.org/00/040123450000003338action=OBSERVEbizStep=https://ref.gs1.org/cbv/BizStep-departingreadPointid=https://id.gs1.org/414/4012345000115/254/987{https://ns.example.com/epcis/}myField1{https://ns.example.com/epcis/}mySubField1=2{https://ns.example.com/epcis/}mySubField2=5
+```
+
+### 4. Final URN Hash
+```text
+ni:///sha-256;6ae96341e0acc6d7a261364751f60e68278a81cdf51da0abb6b4e617014e39d7?ver=CBV2.0
+```
+
+---
+
+## Installation & Getting Started
+
+Add the crates to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-epcis-models = "0.1.1"
-epcis-hash = "0.1.1"
-epcis-translate = "0.1.1"
+epcis-models = "0.1.2"
+epcis-hash = "0.1.2"
+epcis-translate = "0.1.2"
 ```
 
-### Complete Example
+### End-to-End Rust Example
 
-Here is an end-to-end example demonstrating how to construct an event, calculate its canonical hash, and translate an SGTIN identifier:
+Here is how you parse a Digital Link identifier, construct a type-safe ObjectEvent, and calculate its canonical hash:
 
 ```rust
 use epcis_models::{
@@ -39,7 +145,7 @@ use epcis_translate::Sgtin;
 use chrono::Utc;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Translate SGTIN from Digital Link to EPC URN format
+    // 1. Translate SGTIN from Digital Link to EPC URN format (zero-allocation parsing)
     let digital_link = "https://id.gs1.org/01/04012345987652/21/12345";
     let company_prefix_len = 7; // Length of company prefix "4012345"
     let sgtin = Sgtin::from_digital_link(digital_link, company_prefix_len)?;
@@ -68,7 +174,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Running Tests
 
-To run the test suite and confirm everything compiles and runs correctly:
+To verify correctness and run compliance checks against the official test vectors:
 
 ```bash
 cargo test
@@ -76,9 +182,4 @@ cargo test
 
 ## License
 
-Licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.
+Licensed under either of Apache-2.0 or MIT.
