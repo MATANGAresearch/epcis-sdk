@@ -24,7 +24,7 @@ Every EPCIS event answers the **5 Ws and How**:
 This workspace consists of three modular crates:
 
 1. **[`epcis-models`](./epcis-models)**: Type-safe event models (`ObjectEvent`, `AggregationEvent`, `TransformationEvent`, etc.) and strum-backed CBV (Core Business Vocabulary) enum systems. Fully serializeable to and from JSON/JSON-LD.
-2. **[`epcis-hash`](./epcis-hash)**: Deterministic, representation-agnostic canonical SHA-256 event hashing conforming to the GS1 and `OpenEPCIS` specification.
+2. **[`epcis-hash`](./epcis-hash)**: Deterministic, representation-agnostic canonical SHA-256 event hashing conforming to GS1 and `OpenEPCIS` specifications. Supports both XML and JSON/JSON-LD input payloads.
 3. **[`epcis-translate`](./epcis-translate)**: Zero-allocation, bidirectional translators for converting GS1 keys (SGTIN, SSCC, SGLN, GRAI, GIAI) between EPC URN and GS1 Digital Link path formats without heap allocation.
 
 ---
@@ -37,6 +37,10 @@ In modern supply chain architectures (especially distributed shared ledgers, blo
 * **Error Declarations**: Referencing the original event’s hash to declare correction events.
 
 Because events can be serialized in different ways (differing whitespaces, key ordering, XML vs. JSON-LD, compact URIs vs. bare words), they must first be transformed into a **pre-hash string** using strict canonical rules before hashing.
+
+### Supported Formats & Versions
+* **Input Formats**: Generates canonical pre-hash strings from both **JSON-LD/JSON** (via `canonicalize_json`) and **XML** documents (via `canonicalize_xml`).
+* **Standard Versions**: Supports both the latest **CBV 2.0 / 2.1** standards (including user extensions, GS1 Digital Link conversions, and Web URI dictionary expansions) and legacy **CBV 1.2 / EPCIS 1.2** standards (where user extensions are excluded from canonical hashing). You can toggle between these modes using the `is_cbv_2_0` boolean parameter.
 
 ### Canonical Property Order (CBV 2.0 / 2.1)
 The algorithm concatenates elements in this exact sequence:
