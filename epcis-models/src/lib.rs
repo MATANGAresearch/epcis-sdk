@@ -1,9 +1,9 @@
-//! Native Rust implementation of the GS1 EPCIS 2.0 Core Event Models.
-
+#![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 pub mod cbv;
 pub mod types;

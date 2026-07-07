@@ -11,6 +11,19 @@ use std::borrow::Cow;
 use crate::error::EpcisModelError;
 
 /// Newtype representing an Electronic Product Code (EPC) URN.
+///
+/// # Examples
+///
+/// ```
+/// use epcis_models::Epc;
+///
+/// let epc = Epc::try_from("urn:epc:id:sgtin:4012345.098765.12345").unwrap();
+/// assert_eq!(epc.to_string(), "urn:epc:id:sgtin:4012345.098765.12345");
+///
+/// // Invalid schemes will fail validation
+/// let invalid = Epc::try_from("invalid-scheme");
+/// assert!(invalid.is_err());
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Epc(pub Cow<'static, str>);
 
@@ -48,6 +61,15 @@ impl std::fmt::Display for Epc {
 
 /// The Action component of an EPCIS event, specifying the status of the objects
 /// identified in the event.
+///
+/// # Examples
+///
+/// ```
+/// use epcis_models::Action;
+///
+/// let action = Action::Observe;
+/// assert_eq!(action, Action::Observe);
+/// ```
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Action {

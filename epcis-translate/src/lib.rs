@@ -1,12 +1,9 @@
-//! Zero-allocation bidirectional translators for GS1 identifiers.
-//!
-//! Supports parsing and generating both EPC URNs and GS1 Digital Link formats
-//! for SGTIN, SSCC, SGLN, GRAI, and GIAI keys without allocating memory where possible.
-
+#![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 /// Parsing errors that can occur during identifier translation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,6 +32,22 @@ impl std::fmt::Display for ParseError {
 impl std::error::Error for ParseError {}
 
 /// Serialized Global Trade Item Number (SGTIN).
+///
+/// # Examples
+///
+/// ```
+/// use epcis_translate::Sgtin;
+///
+/// // Parse from URN
+/// let urn = "urn:epc:id:sgtin:4012345.098765.12345";
+/// let sgtin = Sgtin::from_urn(urn).unwrap();
+/// assert_eq!(sgtin.company_prefix, "4012345");
+/// assert_eq!(sgtin.serial_number, "12345");
+///
+/// // Translate to GS1 Digital Link URL path
+/// let dl = sgtin.to_digital_link("https://id.gs1.org");
+/// assert_eq!(dl, "https://id.gs1.org/01/04012345987652/21/12345");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sgtin<'a> {
     /// GS1 Company Prefix
@@ -143,6 +156,22 @@ impl<'a> Sgtin<'a> {
 }
 
 /// Serial Shipping Container Code (SSCC).
+///
+/// # Examples
+///
+/// ```
+/// use epcis_translate::Sscc;
+///
+/// // Parse from URN
+/// let urn = "urn:epc:id:sscc:4012345.0123456789";
+/// let sscc = Sscc::from_urn(urn).unwrap();
+/// assert_eq!(sscc.company_prefix, "4012345");
+/// assert_eq!(sscc.serial_ref, "123456789");
+///
+/// // Translate to GS1 Digital Link format
+/// let dl = sscc.to_digital_link("https://id.gs1.org");
+/// assert_eq!(dl, "https://id.gs1.org/00/040123451234567894");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sscc<'a> {
     /// GS1 Company Prefix
@@ -237,6 +266,22 @@ impl<'a> Sscc<'a> {
 }
 
 /// Global Location Number (SGLN) with optional extension.
+///
+/// # Examples
+///
+/// ```
+/// use epcis_translate::Sgln;
+///
+/// // Parse from URN
+/// let urn = "urn:epc:id:sgln:4012345.01234.567";
+/// let sgln = Sgln::from_urn(urn).unwrap();
+/// assert_eq!(sgln.company_prefix, "4012345");
+/// assert_eq!(sgln.extension, "567");
+///
+/// // Translate to GS1 Digital Link path structure
+/// let dl = sgln.to_digital_link("https://id.gs1.org");
+/// assert_eq!(dl, "https://id.gs1.org/414/4012345012347/254/567");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sgln<'a> {
     /// GS1 Company Prefix

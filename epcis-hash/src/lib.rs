@@ -1,11 +1,9 @@
-//! Canonical Event Hashing library for GS1 EPCIS 2.0.
-//!
-//! Provides deterministic SHA-256 generation conforming to the GS1 and `OpenEPCIS` specifications.
-
+#![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 use sha2::{Sha256, Digest};
 use serde_json::Value;
@@ -1433,6 +1431,30 @@ fn find_events_in_tree(node: ContextNode, events: &mut Vec<ContextNode>) {
     }
 }
 
+/// Computes the deterministic canonical hash for a given EPCIS event.
+///
+/// Under the hood, this standardizes fields (such as timestamps), strips transient fields,
+/// orders child elements alphabetically, and generates a deterministic SHA-256 hash.
+///
+/// # Examples
+///
+/// ```
+/// use epcis_models::{ObjectEvent, Action, EPCISEvent};
+/// use epcis_hash::compute_canonical_hash;
+/// use chrono::Utc;
+///
+/// let event = ObjectEvent::new(
+///     Utc::now(),
+///     "+00:00".to_string(),
+///     Action::Observe
+/// );
+/// let event_enum = EPCISEvent::ObjectEvent(event);
+///
+/// let hash_urn = compute_canonical_hash(&event_enum);
+/// assert!(hash_urn.is_ok());
+/// assert!(hash_urn.unwrap().starts_with("ni:///sha-256;"));
+/// ```
+///
 /// # Errors
 ///
 /// Returns `EpcisHashError` if serialization to JSON or hashing fails.

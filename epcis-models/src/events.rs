@@ -26,6 +26,20 @@ pub struct PersistentDisposition {
 }
 
 /// An `ObjectEvent` captures an observation, addition, or deletion of specific items.
+///
+/// # Examples
+///
+/// ```
+/// use epcis_models::{ObjectEvent, Action};
+/// use chrono::Utc;
+///
+/// let event = ObjectEvent::new(
+///     Utc::now(),
+///     "+00:00".to_string(),
+///     Action::Observe
+/// );
+/// assert_eq!(event.action, Action::Observe);
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObjectEvent {
@@ -113,6 +127,27 @@ impl ObjectEvent {
 }
 
 /// An `AggregationEvent` captures an event where objects are aggregated into a parent container.
+///
+/// # Examples
+///
+/// ```
+/// use epcis_models::{AggregationEvent, Action, Epc};
+/// use chrono::Utc;
+///
+/// let parent = Epc::try_from("urn:epc:id:sscc:4012345.0123456789").unwrap();
+/// let child = Epc::try_from("urn:epc:id:sgtin:4012345.098765.12345").unwrap();
+///
+/// let mut event = AggregationEvent::new(
+///     Utc::now(),
+///     "+00:00".to_string(),
+///     Action::Add
+/// );
+/// event.parent_id = Some(parent);
+/// event.child_e_p_cs = Some(vec![child]);
+///
+/// assert_eq!(event.action, Action::Add);
+/// assert!(event.parent_id.is_some());
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AggregationEvent {
@@ -200,6 +235,26 @@ impl AggregationEvent {
 }
 
 /// A `TransformationEvent` captures the consumption of input items and the creation of output items.
+///
+/// # Examples
+///
+/// ```
+/// use epcis_models::{TransformationEvent, Epc};
+/// use chrono::Utc;
+///
+/// let input = Epc::try_from("urn:epc:id:sgtin:4012345.098765.11111").unwrap();
+/// let output = Epc::try_from("urn:epc:id:sgtin:4012345.098765.22222").unwrap();
+///
+/// let mut event = TransformationEvent::new(
+///     Utc::now(),
+///     "+00:00".to_string()
+/// );
+/// event.input_e_p_c_list = Some(vec![input]);
+/// event.output_e_p_c_list = Some(vec![output]);
+///
+/// assert!(event.input_e_p_c_list.is_some());
+/// assert!(event.output_e_p_c_list.is_some());
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransformationEvent {
