@@ -662,3 +662,71 @@ mod tests {
         assert!(elapsed.as_millis() < 500, "Performance regression detected! 100k roundtrips took {:?}", elapsed);
     }
 }
+
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
+
+#[cfg(feature = "wasm")]
+/// Translates an EPC URN to a GS1 Digital Link URL in WebAssembly environments.
+///
+/// # Errors
+/// Returns an error string if parsing or format validation fails.
+#[wasm_bindgen]
+pub fn translate_urn_to_dl_wasm(urn: &str, base_url: &str) -> Result<String, String> {
+    let parts: Vec<&str> = urn.split(':').collect();
+    if parts.len() < 5 {
+        return Err("Invalid URN format. Expected e.g. urn:epc:id:sgtin:...".to_string());
+    }
+    let scheme = parts[3];
+    match scheme {
+        "sgtin" => {
+            let sgtin = Sgtin::from_urn(urn).map_err(|e| format!("Failed to parse SGTIN: {:?}", e))?;
+            Ok(sgtin.to_digital_link(base_url))
+        }
+        "sscc" => {
+            let sscc = Sscc::from_urn(urn).map_err(|e| format!("Failed to parse SSCC: {:?}", e))?;
+            Ok(sscc.to_digital_link(base_url))
+        }
+        "sgln" => {
+            let sgln = Sgln::from_urn(urn).map_err(|e| format!("Failed to parse SGLN: {:?}", e))?;
+            Ok(sgln.to_digital_link(base_url))
+        }
+        "grai" => {
+            let grai = Grai::from_urn(urn).map_err(|e| format!("Failed to parse GRAI: {:?}", e))?;
+            Ok(grai.to_digital_link(base_url))
+        }
+        "giai" => {
+            let giai = Giai::from_urn(urn).map_err(|e| format!("Failed to parse GIAI: {:?}", e))?;
+            Ok(giai.to_digital_link(base_url))
+        }
+        other => Err(format!("Unsupported URN scheme: {}", other)),
+    }
+}
+
+/// Translates a GS1 Digital Link URL to an EPC URN in WebAssembly environments.
+///
+/// # Errors
+/// Returns an error string if parsing or check digit verification fails.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn translate_dl_to_urn_wasm(dl: &str, prefix_len: usize) -> Result<String, String> {
+    if dl.contains("/01/") {
+        let sgtin = Sgtin::from_digital_link(dl, prefix_len).map_err(|e| format!("Failed to parse SGTIN DL: {:?}", e))?;
+        Ok(sgtin.to_urn())
+    } else if dl.contains("/00/") {
+        let sscc = Sscc::from_digital_link(dl, prefix_len).map_err(|e| format!("Failed to parse SSCC DL: {:?}", e))?;
+        Ok(sscc.to_urn())
+    } else if dl.contains("/414/") {
+        let sgln = Sgln::from_digital_link(dl, prefix_len).map_err(|e| format!("Failed to parse SGLN DL: {:?}", e))?;
+        Ok(sgln.to_urn())
+    } else if dl.contains("/8003/") {
+        let grai = Grai::from_digital_link(dl, prefix_len).map_err(|e| format!("Failed to parse GRAI DL: {:?}", e))?;
+        Ok(grai.to_urn())
+    } else if dl.contains("/8004/") {
+        let giai = Giai::from_digital_link(dl, prefix_len).map_err(|e| format!("Failed to parse GIAI DL: {:?}", e))?;
+        Ok(giai.to_urn())
+    } else {
+        Err("Could not detect GS1 Application Identifier (AI) in Digital Link path (expected e.g. /01/, /00/, /414/, /8003/, /8004/)".to_string())
+    }
+}
+

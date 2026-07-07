@@ -1905,3 +1905,42 @@ mod unit_tests {
     }
 }
 
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
+
+#[cfg(feature = "wasm")]
+/// Generates canonical hashes for all events in an XML document in WebAssembly environments.
+///
+/// # Errors
+/// Returns an error string if XML parsing or canonicalization fails.
+#[wasm_bindgen]
+pub fn hash_xml_document_wasm(xml_str: &str, is_cbv_2_0: bool) -> Result<String, String> {
+    let prehashes = canonicalize_xml(xml_str, is_cbv_2_0).map_err(|e| e.to_string())?;
+    let mut hashes = Vec::new();
+    for line in prehashes.lines() {
+        if !line.trim().is_empty() {
+            hashes.push(compute_hash_from_prehash(line));
+        }
+    }
+    Ok(hashes.join("\n"))
+}
+
+#[cfg(feature = "wasm")]
+/// Generates canonical hashes for all events in a JSON/JSON-LD document in WebAssembly environments.
+///
+/// # Errors
+/// Returns an error string if JSON parsing or canonicalization fails.
+#[wasm_bindgen]
+pub fn hash_json_document_wasm(json_str: &str, is_cbv_2_0: bool) -> Result<String, String> {
+    let json_val = serde_json::from_str(json_str).map_err(|e| e.to_string())?;
+    let prehashes = canonicalize_json(&json_val, is_cbv_2_0).map_err(|e| e.to_string())?;
+    let mut hashes = Vec::new();
+    for line in prehashes.lines() {
+        if !line.trim().is_empty() {
+            hashes.push(compute_hash_from_prehash(line));
+        }
+    }
+    Ok(hashes.join("\n"))
+}
+
+

@@ -15,8 +15,21 @@ categories = ["parser-implementations", "encoding"]
 [dependencies]
 epcis-models = { workspace = true }
 serde = { workspace = true }
+wasm-bindgen = { workspace = true, optional = true }
+
+[features]
+wasm = ["dep:wasm-bindgen"]
+
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "translation_bench"
+harness = false
 
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
 

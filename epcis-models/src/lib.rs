@@ -10,6 +10,7 @@ pub mod types;
 pub mod events;
 pub mod document;
 pub mod error;
+pub mod validation;
 
 // Re-export common types at crate level for convenient usage
 pub use error::EpcisModelError;
@@ -26,3 +27,4 @@ pub use document::{
     EPCISDocument, EPCISBody, EPCISHeader, EPCISMasterData, VocabularyElement,
     VocabularyElementList, VocabularyAttribute,
 };
+pub use validation::{validate_extension_keys, ValidationError};

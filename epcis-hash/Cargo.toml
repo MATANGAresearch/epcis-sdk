@@ -21,11 +21,22 @@ chrono = { workspace = true }
 quick-xml = { workspace = true }
 regex = { workspace = true }
 thiserror = { workspace = true }
+wasm-bindgen = { workspace = true, optional = true }
+
+[features]
+wasm = ["dep:wasm-bindgen"]
+
 
 [dev-dependencies]
 epcis-translate = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "hash_bench"
+harness = false
 
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
 
