@@ -21,11 +21,12 @@ Every EPCIS event answers the **5 Ws and How**:
 
 ## Workspace Crates
 
-This workspace consists of three modular crates:
+This workspace consists of four modular crates:
 
-1. **[`epcis-models`](./epcis-models)**: Type-safe event models (`ObjectEvent`, `AggregationEvent`, `TransformationEvent`, etc.) and strum-backed CBV (Core Business Vocabulary) enum systems. Fully serializeable to and from JSON/JSON-LD.
+1. **[`epcis-models`](./epcis-models)**: Type-safe event models (`ObjectEvent`, `AggregationEvent`, `TransformationEvent`, etc.) and strum-backed CBV (Core Business Vocabulary) enum systems. Fully serializable to and from JSON/JSON-LD and XML.
 2. **[`epcis-hash`](./epcis-hash)**: Deterministic, representation-agnostic canonical SHA-256 event hashing conforming to GS1 and `OpenEPCIS` specifications. Supports both XML and JSON/JSON-LD input payloads.
 3. **[`epcis-translate`](./epcis-translate)**: Zero-allocation, bidirectional translators for converting GS1 keys (SGTIN, SSCC, SGLN, GRAI, GIAI) between EPC URN and GS1 Digital Link path formats without heap allocation.
+4. **[`epcis-cli`](./epcis-cli)**: A command line binary wrapper for running event hashing and GS1 identifier translation directly from the terminal.
 
 ---
 
@@ -175,6 +176,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+---
+
+## Command Line Interface (`epcis-cli`)
+
+We provide a built-in command line utility for hashing documents and translating keys directly from the terminal.
+
+### Installation
+To compile and install the CLI tool locally from the workspace:
+```bash
+cargo install --path epcis-cli
+```
+
+### Usage Examples
+* **Translate an SGTIN EPC URN to GS1 Digital Link**:
+  ```bash
+  epcis-cli --translate "urn:epc:id:sgtin:4012345.098765.12345"
+  ```
+* **Translate a GS1 Digital Link URL back to EPC URN**:
+  ```bash
+  epcis-cli --translate "https://id.gs1.org/01/04012345987652/21/12345" -l 7
+  ```
+* **Generate Canonical Pre-hashes from an XML or JSON-LD document**:
+  ```bash
+  epcis-cli -p document.xml
+  # Or pipe via stdin
+  cat document.jsonld | epcis-cli -p
+  ```
+* **Generate final SHA-256 Hash URNs**:
+  ```bash
+  epcis-cli document.xml
+  ```
+
+---
 
 ## Running Tests
 
