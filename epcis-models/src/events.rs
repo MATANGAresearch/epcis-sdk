@@ -5,13 +5,13 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use crate::types::{
-    Action, BizLocation, BizTransaction, Destination, Epc,
-    ErrorDeclaration, QuantityElement, ReadPoint, SensorElement, Source,
-};
 use crate::cbv::{BizStep, Disposition};
+use crate::types::{
+    Action, BizLocation, BizTransaction, Destination, Epc, ErrorDeclaration, QuantityElement,
+    ReadPoint, SensorElement, Source,
+};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 /// Persistent disposition settings for tracking updates in an `ObjectEvent`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,7 +49,11 @@ pub struct ObjectEvent {
     /// Timezone offset (e.g. "+01:00")
     pub event_time_zone_offset: String,
     /// Record timestamp (optional, set by repository)
-    #[serde(default, with = "crate::document::opt_datetime_serde", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "crate::document::opt_datetime_serde",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub record_time: Option<DateTime<Utc>>,
     /// Event identifier (often URN like urn:uuid)
     #[serde(rename = "eventID", skip_serializing_if = "Option::is_none")]
@@ -57,7 +61,7 @@ pub struct ObjectEvent {
     /// Error declaration for corrective events
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_declaration: Option<ErrorDeclaration>,
-    
+
     /// Action specifying lifecycle state change
     pub action: Action,
     /// List of item EPCs
@@ -66,7 +70,7 @@ pub struct ObjectEvent {
     /// List of class/quantity items
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quantity_list: Option<Vec<QuantityElement>>,
-    
+
     /// Business step (e.g. receiving)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub biz_step: Option<BizStep>,
@@ -162,7 +166,11 @@ pub struct AggregationEvent {
     /// Timezone offset
     pub event_time_zone_offset: String,
     /// Record timestamp (optional)
-    #[serde(default, with = "crate::document::opt_datetime_serde", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "crate::document::opt_datetime_serde",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub record_time: Option<DateTime<Utc>>,
     /// Event identifier
     #[serde(rename = "eventID", skip_serializing_if = "Option::is_none")]
@@ -170,7 +178,7 @@ pub struct AggregationEvent {
     /// Error declaration details
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_declaration: Option<ErrorDeclaration>,
-    
+
     /// Action specifying parent-child state change (ADD, DELETE, OBSERVE)
     pub action: Action,
     /// Parent container EPC
@@ -182,7 +190,7 @@ pub struct AggregationEvent {
     /// List of child quantities
     #[serde(skip_serializing_if = "Option::is_none")]
     pub child_quantity_list: Option<Vec<QuantityElement>>,
-    
+
     /// Business step (e.g. packing)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub biz_step: Option<BizStep>,
@@ -270,7 +278,11 @@ pub struct TransformationEvent {
     /// Timezone offset
     pub event_time_zone_offset: String,
     /// Record timestamp
-    #[serde(default, with = "crate::document::opt_datetime_serde", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "crate::document::opt_datetime_serde",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub record_time: Option<DateTime<Utc>>,
     /// Event identifier
     #[serde(rename = "eventID", skip_serializing_if = "Option::is_none")]
@@ -278,7 +290,7 @@ pub struct TransformationEvent {
     /// Error declaration details
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_declaration: Option<ErrorDeclaration>,
-    
+
     /// Input item EPCs
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_e_p_c_list: Option<Vec<Epc>>,
@@ -294,7 +306,7 @@ pub struct TransformationEvent {
     /// Unique transformation logic identifier
     #[serde(rename = "transformationID", skip_serializing_if = "Option::is_none")]
     pub transformation_id: Option<String>,
-    
+
     /// Business step
     #[serde(skip_serializing_if = "Option::is_none")]
     pub biz_step: Option<BizStep>,
@@ -367,7 +379,11 @@ pub struct AssociationEvent {
     /// Timezone offset
     pub event_time_zone_offset: String,
     /// Record timestamp
-    #[serde(default, with = "crate::document::opt_datetime_serde", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "crate::document::opt_datetime_serde",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub record_time: Option<DateTime<Utc>>,
     /// Event identifier
     #[serde(rename = "eventID", skip_serializing_if = "Option::is_none")]
@@ -375,7 +391,7 @@ pub struct AssociationEvent {
     /// Error declaration details
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_declaration: Option<ErrorDeclaration>,
-    
+
     /// Action specifying parent-child state change (ADD, DELETE, OBSERVE)
     pub action: Action,
     /// Parent container EPC
@@ -387,7 +403,7 @@ pub struct AssociationEvent {
     /// List of child quantities
     #[serde(skip_serializing_if = "Option::is_none")]
     pub child_quantity_list: Option<Vec<QuantityElement>>,
-    
+
     /// Business step
     #[serde(skip_serializing_if = "Option::is_none")]
     pub biz_step: Option<BizStep>,
@@ -455,7 +471,11 @@ pub struct TransactionEvent {
     /// Timezone offset
     pub event_time_zone_offset: String,
     /// Record timestamp
-    #[serde(default, with = "crate::document::opt_datetime_serde", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "crate::document::opt_datetime_serde",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub record_time: Option<DateTime<Utc>>,
     /// Event identifier
     #[serde(rename = "eventID", skip_serializing_if = "Option::is_none")]
@@ -463,7 +483,7 @@ pub struct TransactionEvent {
     /// Error declaration details
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_declaration: Option<ErrorDeclaration>,
-    
+
     /// Action specifying parent-child state change
     pub action: Action,
     /// Parent identifier
@@ -475,7 +495,7 @@ pub struct TransactionEvent {
     /// List of quantities
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quantity_list: Option<Vec<QuantityElement>>,
-    
+
     /// Business step
     #[serde(skip_serializing_if = "Option::is_none")]
     pub biz_step: Option<BizStep>,

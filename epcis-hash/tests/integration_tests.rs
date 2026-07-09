@@ -1,20 +1,22 @@
-use epcis_models::{
-    Action, BizLocation, BizStep, Disposition, EPCISDocument, EPCISEvent,
-    Epc, ObjectEvent, ReadPoint, StandardBizStep, StandardDisposition,
-};
-use epcis_hash::compute_canonical_hash;
-use epcis_translate::{Sgtin, Sscc, Sgln, Grai, Giai};
 use chrono::{TimeZone, Utc};
+use epcis_hash::compute_canonical_hash;
+use epcis_models::{
+    Action, BizLocation, BizStep, Disposition, EPCISDocument, EPCISEvent, Epc, ObjectEvent,
+    ReadPoint, StandardBizStep, StandardDisposition,
+};
+use epcis_translate::{Giai, Grai, Sgln, Sgtin, Sscc};
 
 #[test]
 fn test_models_and_strum_enums() {
     let event_time = Utc.with_ymd_and_hms(2020, 3, 4, 11, 0, 30).unwrap();
     let mut event = ObjectEvent::new(event_time, "+01:00".to_string(), Action::Observe);
-    
+
     // Set standard strum-backed enums
     event.biz_step = Some(BizStep::Standard(StandardBizStep::Receiving));
     event.disposition = Some(Disposition::Standard(StandardDisposition::InTransit));
-    event.epc_list = Some(vec![Epc::try_from("urn:epc:id:sgtin:0614141.107346.2023").unwrap()]);
+    event.epc_list = Some(vec![
+        Epc::try_from("urn:epc:id:sgtin:0614141.107346.2023").unwrap(),
+    ]);
     event.read_point = Some(ReadPoint::from("urn:epc:id:sgln:0614141.00777.0"));
     event.biz_location = Some(BizLocation::from("urn:epc:id:sgln:0614141.00888.0"));
 
@@ -30,10 +32,14 @@ fn test_models_and_strum_enums() {
 fn test_custom_cbv_enums() {
     let event_time = Utc.with_ymd_and_hms(2020, 3, 4, 11, 0, 30).unwrap();
     let mut event = ObjectEvent::new(event_time, "+01:00".to_string(), Action::Observe);
-    
+
     // Set custom enums
-    event.biz_step = Some(BizStep::Custom("http://example.com/bizstep/custom_step".to_string()));
-    event.disposition = Some(Disposition::Custom("http://example.com/disp/custom_disp".to_string()));
+    event.biz_step = Some(BizStep::Custom(
+        "http://example.com/bizstep/custom_step".to_string(),
+    ));
+    event.disposition = Some(Disposition::Custom(
+        "http://example.com/disp/custom_disp".to_string(),
+    ));
 
     let doc = EPCISDocument::new(vec![EPCISEvent::ObjectEvent(event)]);
     let json_output = serde_json::to_string(&doc).unwrap();
@@ -61,16 +67,20 @@ fn test_custom_cbv_enums() {
 #[test]
 fn test_canonical_event_hashing() {
     let event_time = Utc.with_ymd_and_hms(2020, 3, 4, 11, 0, 30).unwrap();
-    
+
     // Create first event with some field order
     let mut event1 = ObjectEvent::new(event_time, "+01:00".to_string(), Action::Observe);
-    event1.epc_list = Some(vec![Epc::try_from("urn:epc:id:sgtin:0614141.107346.2023").unwrap()]);
+    event1.epc_list = Some(vec![
+        Epc::try_from("urn:epc:id:sgtin:0614141.107346.2023").unwrap(),
+    ]);
     event1.biz_step = Some(BizStep::Standard(StandardBizStep::Receiving));
     event1.record_time = Some(Utc::now()); // recordTime should be excluded from hash calculation
-    
+
     // Create second event with same core info but different recordTime and missing eventID
     let mut event2 = ObjectEvent::new(event_time, "+01:00".to_string(), Action::Observe);
-    event2.epc_list = Some(vec![Epc::try_from("urn:epc:id:sgtin:0614141.107346.2023").unwrap()]);
+    event2.epc_list = Some(vec![
+        Epc::try_from("urn:epc:id:sgtin:0614141.107346.2023").unwrap(),
+    ]);
     event2.biz_step = Some(BizStep::Standard(StandardBizStep::Receiving));
     event2.record_time = Some(Utc::now() + chrono::Duration::hours(1)); // different recordTime
     event2.event_id = Some("urn:uuid:some-random-id".to_string()); // event_id should be excluded
@@ -314,7 +324,10 @@ fn test_standard_vectors() {
     use std::path::Path;
 
     let dir_path = "../research-repos/epcis-python/tests/examples";
-    assert!(Path::new(dir_path).exists(), "Cloned examples directory not found!");
+    assert!(
+        Path::new(dir_path).exists(),
+        "Cloned examples directory not found!"
+    );
 
     // The upstream .prehashes files for these vectors are corrupted (verified
     // byte-level: one truncated mid-token, one with garbled interleaved text),
@@ -340,8 +353,13 @@ fn test_standard_vectors() {
             // 1. Verify prehashes if exists
             let prehashes_path = path.with_extension("prehashes");
             if prehashes_path.exists() && !CORRUPT_UPSTREAM_PREHASHES.contains(&file_name) {
-                let expected_prehashes = fs::read_to_string(&prehashes_path).unwrap().replace("\r", "");
-                let expected_lines: Vec<&str> = expected_prehashes.lines().filter(|s| !s.is_empty()).collect();
+                let expected_prehashes = fs::read_to_string(&prehashes_path)
+                    .unwrap()
+                    .replace("\r", "");
+                let expected_lines: Vec<&str> = expected_prehashes
+                    .lines()
+                    .filter(|s| !s.is_empty())
+                    .collect();
 
                 let actual_prehashes_str = if ext == "xml" {
                     epcis_hash::canonicalize_xml(&file_content, true)
@@ -352,20 +370,21 @@ fn test_standard_vectors() {
 
                 match actual_prehashes_str {
                     Ok(prehash_str) => {
-                        let actual_lines: Vec<&str> = prehash_str.lines().filter(|s| !s.is_empty()).collect();
+                        let actual_lines: Vec<&str> =
+                            prehash_str.lines().filter(|s| !s.is_empty()).collect();
                         assert_eq!(
                             actual_lines.len(),
                             expected_lines.len(),
                             "Number of events mismatch for {}",
                             file_name
                         );
-                        for (i, (actual, expected)) in actual_lines.iter().zip(expected_lines.iter()).enumerate() {
+                        for (i, (actual, expected)) in
+                            actual_lines.iter().zip(expected_lines.iter()).enumerate()
+                        {
                             assert_eq!(
-                                actual,
-                                expected,
+                                actual, expected,
                                 "Pre-hash mismatch for {} event {}",
-                                file_name,
-                                i
+                                file_name, i
                             );
                         }
                     }
@@ -379,7 +398,8 @@ fn test_standard_vectors() {
             let hashes_path = path.with_extension("hashes");
             if hashes_path.exists() {
                 let expected_hashes = fs::read_to_string(&hashes_path).unwrap().replace("\r", "");
-                let expected_lines: Vec<&str> = expected_hashes.lines().filter(|s| !s.is_empty()).collect();
+                let expected_lines: Vec<&str> =
+                    expected_hashes.lines().filter(|s| !s.is_empty()).collect();
 
                 let actual_prehashes_str = if ext == "xml" {
                     epcis_hash::canonicalize_xml(&file_content, true)
@@ -389,21 +409,22 @@ fn test_standard_vectors() {
                 };
 
                 if let Ok(prehash_str) = actual_prehashes_str {
-                    let actual_lines: Vec<&str> = prehash_str.lines().filter(|s| !s.is_empty()).collect();
+                    let actual_lines: Vec<&str> =
+                        prehash_str.lines().filter(|s| !s.is_empty()).collect();
                     assert_eq!(
                         actual_lines.len(),
                         expected_lines.len(),
                         "Number of hashes mismatch for {}",
                         file_name
                     );
-                    for (i, (actual_pre, expected)) in actual_lines.iter().zip(expected_lines.iter()).enumerate() {
+                    for (i, (actual_pre, expected)) in
+                        actual_lines.iter().zip(expected_lines.iter()).enumerate()
+                    {
                         let actual_hash = epcis_hash::compute_hash_from_prehash(actual_pre);
                         assert_eq!(
-                            actual_hash,
-                            *expected,
+                            actual_hash, *expected,
                             "Hash mismatch for {} event {}",
-                            file_name,
-                            i
+                            file_name, i
                         );
                     }
                 }
@@ -416,4 +437,3 @@ fn test_standard_vectors() {
     println!("Successfully validated {} test vectors.", num_tested);
     assert!(num_tested > 10, "Should test at least 10 vectors");
 }
-

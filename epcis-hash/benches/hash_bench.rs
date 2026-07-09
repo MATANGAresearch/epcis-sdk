@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use std::hint::black_box;
+use criterion::{Criterion, criterion_group, criterion_main};
 use epcis_hash::{canonicalize_json, canonicalize_xml};
+use std::hint::black_box;
 
 fn bench_hashing(c: &mut Criterion) {
     let json_input = r#"{

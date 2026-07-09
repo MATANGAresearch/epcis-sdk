@@ -5,9 +5,9 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 use crate::events::EPCISEvent;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 /// Helper to deserialize a string that might be wrapped as a map under quick-xml (e.g. text tag values).
 ///
@@ -46,7 +46,7 @@ where
         {
             let mut value: Option<String> = None;
             while let Some(key) = map.next_key::<String>()? {
-                if key == "$text" || key == "$value" || key == "" {
+                if key == "$text" || key == "$value" || key.is_empty() {
                     value = Some(map.next_value()?);
                 } else {
                     let _: serde::de::IgnoredAny = map.next_value()?;
@@ -64,6 +64,10 @@ pub mod datetime_serde {
     use serde::{self, Serializer};
 
     /// Serializes to RFC3339 string.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the underlying serializer fails.
     pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -72,6 +76,10 @@ pub mod datetime_serde {
     }
 
     /// Deserializes string or map under quick-xml.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the value is not a parseable RFC3339 datetime.
     pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -87,6 +95,10 @@ pub mod opt_datetime_serde {
     use serde::{self, Serializer};
 
     /// Serializes to RFC3339 string.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the underlying serializer fails.
     pub fn serialize<S>(date: &Option<DateTime<Utc>>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -98,6 +110,10 @@ pub mod opt_datetime_serde {
     }
 
     /// Deserializes option string or map.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if a present value is not a parseable RFC3339 datetime.
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -125,7 +141,9 @@ pub mod opt_datetime_serde {
                 if s.is_empty() {
                     Ok(None)
                 } else {
-                    s.parse::<DateTime<Utc>>().map(Some).map_err(serde::de::Error::custom)
+                    s.parse::<DateTime<Utc>>()
+                        .map(Some)
+                        .map_err(serde::de::Error::custom)
                 }
             }
 
@@ -136,7 +154,9 @@ pub mod opt_datetime_serde {
                 if v.is_empty() {
                     Ok(None)
                 } else {
-                    v.parse::<DateTime<Utc>>().map(Some).map_err(serde::de::Error::custom)
+                    v.parse::<DateTime<Utc>>()
+                        .map(Some)
+                        .map_err(serde::de::Error::custom)
                 }
             }
 
@@ -144,11 +164,15 @@ pub mod opt_datetime_serde {
             where
                 A: serde::de::MapAccess<'de>,
             {
-                let s = super::deserialize_string_or_map_text(serde::de::value::MapAccessDeserializer::new(map))?;
+                let s = super::deserialize_string_or_map_text(
+                    serde::de::value::MapAccessDeserializer::new(map),
+                )?;
                 if s.is_empty() {
                     Ok(None)
                 } else {
-                    s.parse::<DateTime<Utc>>().map(Some).map_err(serde::de::Error::custom)
+                    s.parse::<DateTime<Utc>>()
+                        .map(Some)
+                        .map_err(serde::de::Error::custom)
                 }
             }
         }
@@ -164,29 +188,29 @@ pub struct EPCISDocument {
     /// Context property containing schema mappings for JSON-LD compliance.
     #[serde(rename = "@context")]
     pub context: serde_json::Value,
-    
+
     /// Document identifier (optional).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
-    
+
     /// Type identifier, always "`EPCISDocument`".
     #[serde(rename = "type")]
     pub r#type: String,
-    
+
     /// Schema version, typically "2.0".
     pub schema_version: String,
-    
+
     /// Creation timestamp of this document.
     #[serde(with = "crate::document::datetime_serde")]
     pub creation_date: DateTime<Utc>,
-    
+
     /// Header containing master data vocabulary context (optional).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub epcis_header: Option<EPCISHeader>,
-    
+
     /// Body containing the list of actual tracking events.
     pub epcis_body: EPCISBody,
-    
+
     /// Extension elements.
     #[serde(flatten)]
     pub extensions: serde_json::Map<String, serde_json::Value>,
@@ -225,9 +249,7 @@ impl EPCISDocument {
     pub fn from_xml(xml_str: &str) -> Result<Self, quick_xml::DeError> {
         let raw_val: serde_json::Value = quick_xml::de::from_str(xml_str)?;
         let clean_val = clean_json_value(raw_val);
-        serde_json::from_value(clean_val).map_err(|e| {
-            quick_xml::DeError::Custom(e.to_string())
-        })
+        serde_json::from_value(clean_val).map_err(|e| quick_xml::DeError::Custom(e.to_string()))
     }
 
     /// Serializes the `EPCISDocument` to an XML string.
@@ -263,10 +285,10 @@ fn is_array_field(key: &str) -> bool {
 fn clean_json_value(v: serde_json::Value) -> serde_json::Value {
     match v {
         serde_json::Value::Object(mut map) => {
-            if map.len() == 1 {
-                if let Some(val) = map.remove("$text").or_else(|| map.remove("$value")) {
-                    return clean_json_value(val);
-                }
+            if map.len() == 1
+                && let Some(val) = map.remove("$text").or_else(|| map.remove("$value"))
+            {
+                return clean_json_value(val);
             }
             let cleaned = map
                 .into_iter()

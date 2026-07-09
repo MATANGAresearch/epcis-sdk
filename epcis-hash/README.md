@@ -2,7 +2,7 @@
 
 Deterministic SHA-256 Canonical Hashing implementation for GS1 EPCIS 2.0 events. 
 
-This crate implements the deterministic serialization and hashing procedure outlined by the GS1 and OpenEPCIS standards, allowing systems to produce matching, duplicate-preventing hash identifiers for identical events.
+This crate implements the deterministic serialization and hashing procedure outlined by the GS1 and `OpenEPCIS` standards, allowing systems to produce matching, duplicate-preventing hash identifiers for identical events.
 
 ## Features
 

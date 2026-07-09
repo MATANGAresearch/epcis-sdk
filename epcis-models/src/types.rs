@@ -5,10 +5,10 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use std::borrow::Cow;
 use crate::error::EpcisModelError;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 /// Newtype representing an Electronic Product Code (EPC) URN.
 ///
@@ -44,10 +44,14 @@ impl TryFrom<&str> for Epc {
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         if s.is_empty() {
-            return Err(EpcisModelError::InvalidEpc("EPC URN cannot be empty".to_string()));
+            return Err(EpcisModelError::InvalidEpc(
+                "EPC URN cannot be empty".to_string(),
+            ));
         }
         if !s.starts_with("urn:epc:") && !s.starts_with("http://") && !s.starts_with("https://") {
-            return Err(EpcisModelError::InvalidEpc(format!("EPC URN must start with URN or HTTP scheme: {s}")));
+            return Err(EpcisModelError::InvalidEpc(format!(
+                "EPC URN must start with URN or HTTP scheme: {s}"
+            )));
         }
         Ok(Epc(Cow::Owned(s.to_string())))
     }
@@ -92,14 +96,13 @@ impl<'de> Deserialize<'de> for Action {
             "OBSERVE" => Ok(Action::Observe),
             "DELETE" => Ok(Action::Delete),
             other => Err(serde::de::Error::custom(format!(
-                "invalid action: {}, expected ADD, OBSERVE, or DELETE",
-                other
+                "invalid action: {other}, expected ADD, OBSERVE, or DELETE"
             ))),
         }
     }
 }
 
-/// Type-safe identifier wrapper for ReadPoint.
+/// Type-safe identifier wrapper for `ReadPoint`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ReadPointId(pub Cow<'static, str>);
 
@@ -130,17 +133,21 @@ pub struct ReadPoint {
 
 impl From<&'static str> for ReadPoint {
     fn from(id: &'static str) -> Self {
-        ReadPoint { id: ReadPointId::from(id) }
+        ReadPoint {
+            id: ReadPointId::from(id),
+        }
     }
 }
 
 impl From<String> for ReadPoint {
     fn from(id: String) -> Self {
-        ReadPoint { id: ReadPointId::from(id) }
+        ReadPoint {
+            id: ReadPointId::from(id),
+        }
     }
 }
 
-/// Type-safe identifier wrapper for BizLocation.
+/// Type-safe identifier wrapper for `BizLocation`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BizLocationId(pub Cow<'static, str>);
 
@@ -171,13 +178,17 @@ pub struct BizLocation {
 
 impl From<&'static str> for BizLocation {
     fn from(id: &'static str) -> Self {
-        BizLocation { id: BizLocationId::from(id) }
+        BizLocation {
+            id: BizLocationId::from(id),
+        }
     }
 }
 
 impl From<String> for BizLocation {
     fn from(id: String) -> Self {
-        BizLocation { id: BizLocationId::from(id) }
+        BizLocation {
+            id: BizLocationId::from(id),
+        }
     }
 }
 
@@ -376,7 +387,10 @@ mod tests {
         // Valid URN
         let epc = Epc::try_from("urn:epc:id:sgtin:0614141.107346.2023");
         assert!(epc.is_ok());
-        assert_eq!(epc.unwrap().to_string(), "urn:epc:id:sgtin:0614141.107346.2023");
+        assert_eq!(
+            epc.unwrap().to_string(),
+            "urn:epc:id:sgtin:0614141.107346.2023"
+        );
 
         // Valid URI
         let epc_uri = Epc::try_from("https://id.gs1.org/01/04012345987652/21/12345");

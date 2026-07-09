@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use std::hint::black_box;
+use criterion::{Criterion, criterion_group, criterion_main};
 use epcis_translate::{Sgtin, Sscc};
+use std::hint::black_box;
 
 fn bench_translate(c: &mut Criterion) {
     let sgtin_urn = "urn:epc:id:sgtin:4012345.098765.12345";

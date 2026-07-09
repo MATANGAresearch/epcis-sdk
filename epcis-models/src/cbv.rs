@@ -1,8 +1,8 @@
 //! Core Business Vocabulary (CBV) standard enums and helper representations.
 
-use std::str::FromStr;
 use serde::{Deserialize, Serialize, Serializer};
-use strum_macros::{Display, EnumString, AsRefStr};
+use std::str::FromStr;
+use strum_macros::{AsRefStr, Display, EnumString};
 
 /// Standard business step (bizStep) values as defined by GS1 CBV.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumString, AsRefStr)]

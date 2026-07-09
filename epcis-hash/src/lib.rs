@@ -5,44 +5,76 @@
 #![allow(clippy::module_name_repetitions)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
-use sha2::{Sha256, Digest};
-use serde_json::Value;
 use epcis_models::EPCISEvent;
-use std::collections::BTreeMap;
-use std::borrow::Cow;
-use regex::Regex;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
+use regex::Regex;
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::borrow::Cow;
+use std::collections::BTreeMap;
 
 pub mod error;
 pub use error::EpcisHashError;
 
 use std::sync::LazyLock;
 
-static SGTIN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:sgtin:(\d+)\.(\d+)\.([^\n\r]+)$").expect("valid regex"));
-static SSCC_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:sscc:(\d+)\.(\d+)$").expect("valid regex"));
-static SGLN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:sgln:(\d+)\.(\d*)\.([^\n\r]+)$").expect("valid regex"));
-static GRAI_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:grai:(\d+)\.(\d*)\.([^\n\r]+)$").expect("valid regex"));
-static GIAI_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:giai:(\d+)\.([^\n\r]+)$").expect("valid regex"));
-static PGLN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:pgln:(\d+)\.(\d*)$").expect("valid regex"));
-static LGTIN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:class:lgtin:(\d+)\.(\d+)\.([^\n\r]+)$").expect("valid regex"));
-static IDPAT_SGTIN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:idpat:sgtin:(\d+)\.(\d+)\.\*$").expect("valid regex"));
-static IDPAT_GRAI_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:idpat:grai:(\d+)\.(\d*)\.\*$").expect("valid regex"));
-static IDPAT_GDTI_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:idpat:gdti:(\d+)\.(\d*)\.\*$").expect("valid regex"));
-static IDPAT_SGCN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:idpat:sgcn:(\d+)\.(\d*)\.\*$").expect("valid regex"));
-static IDPAT_CPI_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:idpat:cpi:(\d+)\.([0-9a-zA-Z%-]+)\.\*$").expect("valid regex"));
-static IDPAT_ITIP_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:idpat:itip:(\d+)\.(\d+)\.(\d+)\.(\d+)\.\*$").expect("valid regex"));
-static IDPAT_UPUI_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:idpat:upui:(\d+)\.(\d*)\.\*$").expect("valid regex"));
-static GSRN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:gsrn:(\d+)\.(\d*)$").expect("valid regex"));
-static GSRNP_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:gsrnp:(\d+)\.(\d*)$").expect("valid regex"));
-static GDTI_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:gdti:(\d+)\.(\d*)\.([^\n\r]+)$").expect("valid regex"));
-static CPI_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:cpi:(\d+)\.([^\n\r]+)\.(\d+)$").expect("valid regex"));
-static SGCN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:sgcn:(\d+)\.(\d*)\.(\d+)$").expect("valid regex"));
-static GINC_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:ginc:(\d+)\.([^\n\r]+)$").expect("valid regex"));
-static GSIN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:gsin:(\d+)\.(\d*)$").expect("valid regex"));
-static ITIP_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:itip:(\d+)\.(\d+)\.(\d+)\.(\d+)\.([^\n\r]+)$").expect("valid regex"));
-static UPUI_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^urn:epc:id:upui:(\d+)\.(\d+)\.([^\n\r]+)$").expect("valid regex"));
-
+static SGTIN_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^urn:epc:id:sgtin:(\d+)\.(\d+)\.([^\n\r]+)$").expect("valid regex")
+});
+static SSCC_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^urn:epc:id:sscc:(\d+)\.(\d+)$").expect("valid regex"));
+static SGLN_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^urn:epc:id:sgln:(\d+)\.(\d*)\.([^\n\r]+)$").expect("valid regex")
+});
+static GRAI_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^urn:epc:id:grai:(\d+)\.(\d*)\.([^\n\r]+)$").expect("valid regex")
+});
+static GIAI_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^urn:epc:id:giai:(\d+)\.([^\n\r]+)$").expect("valid regex"));
+static PGLN_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^urn:epc:id:pgln:(\d+)\.(\d*)$").expect("valid regex"));
+static LGTIN_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^urn:epc:class:lgtin:(\d+)\.(\d+)\.([^\n\r]+)$").expect("valid regex")
+});
+static IDPAT_SGTIN_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^urn:epc:idpat:sgtin:(\d+)\.(\d+)\.\*$").expect("valid regex"));
+static IDPAT_GRAI_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^urn:epc:idpat:grai:(\d+)\.(\d*)\.\*$").expect("valid regex"));
+static IDPAT_GDTI_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^urn:epc:idpat:gdti:(\d+)\.(\d*)\.\*$").expect("valid regex"));
+static IDPAT_SGCN_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^urn:epc:idpat:sgcn:(\d+)\.(\d*)\.\*$").expect("valid regex"));
+static IDPAT_CPI_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^urn:epc:idpat:cpi:(\d+)\.([0-9a-zA-Z%-]+)\.\*$").expect("valid regex")
+});
+static IDPAT_ITIP_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^urn:epc:idpat:itip:(\d+)\.(\d+)\.(\d+)\.(\d+)\.\*$").expect("valid regex")
+});
+static IDPAT_UPUI_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^urn:epc:idpat:upui:(\d+)\.(\d*)\.\*$").expect("valid regex"));
+static GSRN_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^urn:epc:id:gsrn:(\d+)\.(\d*)$").expect("valid regex"));
+static GSRNP_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^urn:epc:id:gsrnp:(\d+)\.(\d*)$").expect("valid regex"));
+static GDTI_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^urn:epc:id:gdti:(\d+)\.(\d*)\.([^\n\r]+)$").expect("valid regex")
+});
+static CPI_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^urn:epc:id:cpi:(\d+)\.([^\n\r]+)\.(\d+)$").expect("valid regex")
+});
+static SGCN_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^urn:epc:id:sgcn:(\d+)\.(\d*)\.(\d+)$").expect("valid regex"));
+static GINC_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^urn:epc:id:ginc:(\d+)\.([^\n\r]+)$").expect("valid regex"));
+static GSIN_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^urn:epc:id:gsin:(\d+)\.(\d*)$").expect("valid regex"));
+static ITIP_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^urn:epc:id:itip:(\d+)\.(\d+)\.(\d+)\.(\d+)\.([^\n\r]+)$").expect("valid regex")
+});
+static UPUI_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^urn:epc:id:upui:(\d+)\.(\d+)\.([^\n\r]+)$").expect("valid regex")
+});
 
 /// Node representing an EPCIS event element.
 #[derive(Debug, Clone)]
@@ -67,21 +99,18 @@ fn calculate_check_digit(digits: &str) -> u32 {
         }
     }
     let remainder = sum % 10;
-    if remainder == 0 {
-        0
-    } else {
-        10 - remainder
-    }
+    if remainder == 0 { 0 } else { 10 - remainder }
 }
 
 fn percent_encode(input: &str) -> String {
-    input.replace('!', "%21")
-         .replace('(', "%28")
-         .replace(')', "%29")
-         .replace('*', "%2A")
-         .replace('+', "%2B")
-         .replace(',', "%2C")
-         .replace(':', "%3A")
+    input
+        .replace('!', "%21")
+        .replace('(', "%28")
+        .replace(')', "%29")
+        .replace('*', "%2A")
+        .replace('+', "%2B")
+        .replace(',', "%2C")
+        .replace(':', "%3A")
 }
 
 fn normalize_dl_url(uri: &str) -> Option<String> {
@@ -92,7 +121,8 @@ fn normalize_dl_url(uri: &str) -> Option<String> {
     let mut clean_uri = match uri.find('?') {
         Some(idx) => &uri[..idx],
         None => uri,
-    }.to_string();
+    }
+    .to_string();
 
     clean_uri = clean_uri
         .replace("/gtin/", "/01/")
@@ -114,8 +144,8 @@ fn normalize_dl_url(uri: &str) -> Option<String> {
         .replace("/ser/", "/21/");
 
     let ais = [
-        "/00/", "/01/", "/253/", "/255/", "/401/", "/402/", "/414/",
-        "/417/", "/8003/", "/8004/", "/8006/", "/8010/", "/8017/", "/8018/"
+        "/00/", "/01/", "/253/", "/255/", "/401/", "/402/", "/414/", "/417/", "/8003/", "/8004/",
+        "/8006/", "/8010/", "/8017/", "/8018/",
     ];
     let mut mapped = false;
     for ai in &ais {
@@ -145,14 +175,13 @@ fn normalize_dl_url(uri: &str) -> Option<String> {
         }
     }
 
-    if let Some(idx_10) = clean_uri.find("/10/") {
-        if let Some(idx_21) = clean_uri.find("/21/") {
-            if idx_21 > idx_10 {
-                let after_10 = &clean_uri[idx_10 + 4..];
-                if let Some(slash_idx) = after_10.find('/') {
-                    clean_uri = format!("{}{}", &clean_uri[..idx_10], &after_10[slash_idx..]);
-                }
-            }
+    if let Some(idx_10) = clean_uri.find("/10/")
+        && let Some(idx_21) = clean_uri.find("/21/")
+        && idx_21 > idx_10
+    {
+        let after_10 = &clean_uri[idx_10 + 4..];
+        if let Some(slash_idx) = after_10.find('/') {
+            clean_uri = format!("{}{}", &clean_uri[..idx_10], &after_10[slash_idx..]);
         }
     }
 
@@ -169,6 +198,10 @@ fn normalize_dl_url(uri: &str) -> Option<String> {
 }
 
 /// Normalizes an EPC URN or Digital Link URL.
+// One arm per GS1 key scheme; splitting would obscure the dispatch table.
+// The regex-capture unwraps cannot fail: every group is non-optional in its
+// pattern, so a successful match guarantees their presence.
+#[allow(clippy::too_many_lines, clippy::missing_panics_doc)]
 #[must_use]
 pub fn normalise_uri(uri: &str) -> String {
     if let Some(caps) = SGTIN_RE.captures(uri) {
@@ -177,33 +210,48 @@ pub fn normalise_uri(uri: &str) -> String {
         let serial = caps.get(3).unwrap().as_str();
         let raw_gtin = format!("{}{}{}", &r[0..1], cp, &r[1..]);
         let cd = calculate_check_digit(&raw_gtin);
-        format!("https://id.gs1.org/01/{}{}/21/{}", raw_gtin, cd, percent_encode(serial))
+        format!(
+            "https://id.gs1.org/01/{}{}/21/{}",
+            raw_gtin,
+            cd,
+            percent_encode(serial)
+        )
     } else if let Some(caps) = SSCC_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let ref_part = caps.get(2).unwrap().as_str();
         let ext = &ref_part[0..1];
         let serial_ref = &ref_part[1..];
-        let raw_sscc = format!("{}{}{}", ext, cp, serial_ref);
+        let raw_sscc = format!("{ext}{cp}{serial_ref}");
         let cd = calculate_check_digit(&raw_sscc);
-        format!("https://id.gs1.org/00/{}{}", raw_sscc, cd)
+        format!("https://id.gs1.org/00/{raw_sscc}{cd}")
     } else if let Some(caps) = SGLN_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let loc = caps.get(2).unwrap().as_str();
         let ext = caps.get(3).unwrap().as_str();
-        let raw_gln = format!("{}{}", cp, loc);
+        let raw_gln = format!("{cp}{loc}");
         let cd = calculate_check_digit(&raw_gln);
         if ext == "0" {
-            format!("https://id.gs1.org/414/{}{}", raw_gln, cd)
+            format!("https://id.gs1.org/414/{raw_gln}{cd}")
         } else {
-            format!("https://id.gs1.org/414/{}{}/254/{}", raw_gln, cd, percent_encode(ext))
+            format!(
+                "https://id.gs1.org/414/{}{}/254/{}",
+                raw_gln,
+                cd,
+                percent_encode(ext)
+            )
         }
     } else if let Some(caps) = GRAI_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let asset = caps.get(2).unwrap().as_str();
         let serial = caps.get(3).unwrap().as_str();
-        let raw_grai = format!("0{}{}", cp, asset);
+        let raw_grai = format!("0{cp}{asset}");
         let cd = calculate_check_digit(&raw_grai);
-        format!("https://id.gs1.org/8003/{}{}{}", raw_grai, cd, percent_encode(serial))
+        format!(
+            "https://id.gs1.org/8003/{}{}{}",
+            raw_grai,
+            cd,
+            percent_encode(serial)
+        )
     } else if let Some(caps) = GIAI_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let asset = caps.get(2).unwrap().as_str();
@@ -211,75 +259,92 @@ pub fn normalise_uri(uri: &str) -> String {
     } else if let Some(caps) = PGLN_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let party = caps.get(2).unwrap().as_str();
-        let raw_gln = format!("{}{}", cp, party);
+        let raw_gln = format!("{cp}{party}");
         let cd = calculate_check_digit(&raw_gln);
-        format!("https://id.gs1.org/417/{}{}", raw_gln, cd)
+        format!("https://id.gs1.org/417/{raw_gln}{cd}")
     } else if let Some(caps) = LGTIN_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let r = caps.get(2).unwrap().as_str();
         let lot = caps.get(3).unwrap().as_str();
         let raw_gtin = format!("{}{}{}", &r[0..1], cp, &r[1..]);
         let cd = calculate_check_digit(&raw_gtin);
-        format!("https://id.gs1.org/01/{}{}/10/{}", raw_gtin, cd, percent_encode(lot))
+        format!(
+            "https://id.gs1.org/01/{}{}/10/{}",
+            raw_gtin,
+            cd,
+            percent_encode(lot)
+        )
     } else if let Some(caps) = IDPAT_SGTIN_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let r = caps.get(2).unwrap().as_str();
         let raw_gtin = format!("{}{}{}", &r[0..1], cp, &r[1..]);
         let cd = calculate_check_digit(&raw_gtin);
-        format!("https://id.gs1.org/01/{}{}", raw_gtin, cd)
+        format!("https://id.gs1.org/01/{raw_gtin}{cd}")
     } else if let Some(caps) = GSRN_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let service = caps.get(2).unwrap().as_str();
-        let raw_gln = format!("{}{}", cp, service);
+        let raw_gln = format!("{cp}{service}");
         let cd = calculate_check_digit(&raw_gln);
-        format!("https://id.gs1.org/8018/{}{}", raw_gln, cd)
+        format!("https://id.gs1.org/8018/{raw_gln}{cd}")
     } else if let Some(caps) = GSRNP_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let service = caps.get(2).unwrap().as_str();
-        let raw_gln = format!("{}{}", cp, service);
+        let raw_gln = format!("{cp}{service}");
         let cd = calculate_check_digit(&raw_gln);
-        format!("https://id.gs1.org/8017/{}{}", raw_gln, cd)
+        format!("https://id.gs1.org/8017/{raw_gln}{cd}")
     } else if let Some(caps) = GDTI_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let doc = caps.get(2).unwrap().as_str();
         let serial = caps.get(3).unwrap().as_str();
-        let raw_gln = format!("{}{}", cp, doc);
+        let raw_gln = format!("{cp}{doc}");
         let cd = calculate_check_digit(&raw_gln);
-        format!("https://id.gs1.org/253/{}{}{}", raw_gln, cd, percent_encode(serial))
+        format!(
+            "https://id.gs1.org/253/{}{}{}",
+            raw_gln,
+            cd,
+            percent_encode(serial)
+        )
     } else if let Some(caps) = CPI_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let cpid = caps.get(2).unwrap().as_str();
         let serial = caps.get(3).unwrap().as_str();
-        format!("https://id.gs1.org/8010/{}/8011/{}", percent_encode(&format!("{}{}", cp, cpid)), serial)
+        format!(
+            "https://id.gs1.org/8010/{}/8011/{}",
+            percent_encode(&format!("{cp}{cpid}")),
+            serial
+        )
     } else if let Some(caps) = SGCN_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let coupon = caps.get(2).unwrap().as_str();
         let serial = caps.get(3).unwrap().as_str();
-        let raw_gln = format!("{}{}", cp, coupon);
+        let raw_gln = format!("{cp}{coupon}");
         let cd = calculate_check_digit(&raw_gln);
-        format!("https://id.gs1.org/255/{}{}{}", raw_gln, cd, serial)
+        format!("https://id.gs1.org/255/{raw_gln}{cd}{serial}")
     } else if let Some(caps) = IDPAT_GRAI_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let asset = caps.get(2).unwrap().as_str();
-        let raw_grai = format!("0{}{}", cp, asset);
+        let raw_grai = format!("0{cp}{asset}");
         let cd = calculate_check_digit(&raw_grai);
-        format!("https://id.gs1.org/8003/{}{}", raw_grai, cd)
+        format!("https://id.gs1.org/8003/{raw_grai}{cd}")
     } else if let Some(caps) = IDPAT_GDTI_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let doc = caps.get(2).unwrap().as_str();
-        let raw_gdti = format!("{}{}", cp, doc);
+        let raw_gdti = format!("{cp}{doc}");
         let cd = calculate_check_digit(&raw_gdti);
-        format!("https://id.gs1.org/253/{}{}", raw_gdti, cd)
+        format!("https://id.gs1.org/253/{raw_gdti}{cd}")
     } else if let Some(caps) = IDPAT_SGCN_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let coupon = caps.get(2).unwrap().as_str();
-        let raw_sgcn = format!("{}{}", cp, coupon);
+        let raw_sgcn = format!("{cp}{coupon}");
         let cd = calculate_check_digit(&raw_sgcn);
-        format!("https://id.gs1.org/255/{}{}", raw_sgcn, cd)
+        format!("https://id.gs1.org/255/{raw_sgcn}{cd}")
     } else if let Some(caps) = IDPAT_CPI_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let cpid = caps.get(2).unwrap().as_str();
-        format!("https://id.gs1.org/8010/{}", percent_encode(&format!("{}{}", cp, cpid)))
+        format!(
+            "https://id.gs1.org/8010/{}",
+            percent_encode(&format!("{cp}{cpid}"))
+        )
     } else if let Some(caps) = IDPAT_ITIP_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let item = caps.get(2).unwrap().as_str();
@@ -287,23 +352,27 @@ pub fn normalise_uri(uri: &str) -> String {
         let total = caps.get(4).unwrap().as_str();
         let raw_gtin = format!("{}{}{}", &item[0..1], cp, &item[1..]);
         let cd = calculate_check_digit(&raw_gtin);
-        format!("https://id.gs1.org/8006/{}{}{}{}", raw_gtin, cd, piece, total)
+        format!("https://id.gs1.org/8006/{raw_gtin}{cd}{piece}{total}")
     } else if let Some(caps) = IDPAT_UPUI_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let item = caps.get(2).unwrap().as_str();
         let raw_gtin = format!("{}{}{}", &item[0..1], cp, &item[1..]);
         let cd = calculate_check_digit(&raw_gtin);
-        format!("https://id.gs1.org/01/{}{}", raw_gtin, cd)
+        format!("https://id.gs1.org/01/{raw_gtin}{cd}")
     } else if let Some(caps) = GINC_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let consignment = caps.get(2).unwrap().as_str();
-        format!("https://id.gs1.org/401/{}{}", cp, percent_encode(consignment))
+        format!(
+            "https://id.gs1.org/401/{}{}",
+            cp,
+            percent_encode(consignment)
+        )
     } else if let Some(caps) = GSIN_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let shipper = caps.get(2).unwrap().as_str();
-        let raw_gln = format!("{}{}", cp, shipper);
+        let raw_gln = format!("{cp}{shipper}");
         let cd = calculate_check_digit(&raw_gln);
-        format!("https://id.gs1.org/402/{}{}", raw_gln, cd)
+        format!("https://id.gs1.org/402/{raw_gln}{cd}")
     } else if let Some(caps) = ITIP_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let item = caps.get(2).unwrap().as_str();
@@ -312,14 +381,26 @@ pub fn normalise_uri(uri: &str) -> String {
         let serial = caps.get(5).unwrap().as_str();
         let raw_gtin = format!("{}{}{}", &item[0..1], cp, &item[1..]);
         let cd = calculate_check_digit(&raw_gtin);
-        format!("https://id.gs1.org/8006/{}{}{}{}/21/{}", raw_gtin, cd, piece, total, percent_encode(serial))
+        format!(
+            "https://id.gs1.org/8006/{}{}{}{}/21/{}",
+            raw_gtin,
+            cd,
+            piece,
+            total,
+            percent_encode(serial)
+        )
     } else if let Some(caps) = UPUI_RE.captures(uri) {
         let cp = caps.get(1).unwrap().as_str();
         let item = caps.get(2).unwrap().as_str();
         let serial = caps.get(3).unwrap().as_str();
         let raw_gtin = format!("{}{}{}", &item[0..1], cp, &item[1..]);
         let cd = calculate_check_digit(&raw_gtin);
-        format!("https://id.gs1.org/01/{}{}/235/{}", raw_gtin, cd, percent_encode(serial))
+        format!(
+            "https://id.gs1.org/01/{}{}/235/{}",
+            raw_gtin,
+            cd,
+            percent_encode(serial)
+        )
     } else if let Some(dl) = normalize_dl_url(uri) {
         dl
     } else {
@@ -328,15 +409,10 @@ pub fn normalise_uri(uri: &str) -> String {
 }
 
 fn strip_epcis_namespace(name: &str) -> &str {
-    if name.starts_with("{urn:epcglobal:epcis:xsd:1}") {
-        &name["{urn:epcglobal:epcis:xsd:1}".len()..]
-    } else if name.starts_with("{urn:epcglobal:epcis:xsd:2}") {
-        &name["{urn:epcglobal:epcis:xsd:2}".len()..]
-    } else if name.starts_with("{https://ref.gs1.org/epcis/}") {
-        &name["{https://ref.gs1.org/epcis/}".len()..]
-    } else {
-        name
-    }
+    name.strip_prefix("{urn:epcglobal:epcis:xsd:1}")
+        .or_else(|| name.strip_prefix("{urn:epcglobal:epcis:xsd:2}"))
+        .or_else(|| name.strip_prefix("{https://ref.gs1.org/epcis/}"))
+        .unwrap_or(name)
 }
 
 fn try_format_web_vocabulary(text: &str) -> String {
@@ -347,11 +423,14 @@ fn try_format_web_vocabulary(text: &str) -> String {
     if s.starts_with("cbv:") {
         s = s.replace("cbv:", "https://ref.gs1.org/cbv/");
     }
-    s.replace("urn:epcglobal:cbv:bizstep:", "https://ref.gs1.org/cbv/BizStep-")
-        .replace("urn:epcglobal:cbv:disp:", "https://ref.gs1.org/cbv/Disp-")
-        .replace("urn:epcglobal:cbv:btt:", "https://ref.gs1.org/cbv/BTT-")
-        .replace("urn:epcglobal:cbv:sdt:", "https://ref.gs1.org/cbv/SDT-")
-        .replace("urn:epcglobal:cbv:er:", "https://ref.gs1.org/cbv/ER-")
+    s.replace(
+        "urn:epcglobal:cbv:bizstep:",
+        "https://ref.gs1.org/cbv/BizStep-",
+    )
+    .replace("urn:epcglobal:cbv:disp:", "https://ref.gs1.org/cbv/Disp-")
+    .replace("urn:epcglobal:cbv:btt:", "https://ref.gs1.org/cbv/BTT-")
+    .replace("urn:epcglobal:cbv:sdt:", "https://ref.gs1.org/cbv/SDT-")
+    .replace("urn:epcglobal:cbv:er:", "https://ref.gs1.org/cbv/ER-")
 }
 
 fn normalize_cbv_value(parent_name: Option<&str>, field_name: Option<&str>, value: &str) -> String {
@@ -361,19 +440,17 @@ fn normalize_cbv_value(parent_name: Option<&str>, field_name: Option<&str>, valu
 
     if !normalized.contains(':') && !normalized.contains('/') && !normalized.is_empty() {
         if name == "bizStep" {
-            normalized = format!("https://ref.gs1.org/cbv/BizStep-{}", normalized);
+            normalized = format!("https://ref.gs1.org/cbv/BizStep-{normalized}");
         } else if name == "disposition" || name == "set" || name == "unset" {
-            normalized = format!("https://ref.gs1.org/cbv/Disp-{}", normalized);
+            normalized = format!("https://ref.gs1.org/cbv/Disp-{normalized}");
         } else if name == "type" && parent == "bizTransactionList" {
-            normalized = format!("https://ref.gs1.org/cbv/BTT-{}", normalized);
+            normalized = format!("https://ref.gs1.org/cbv/BTT-{normalized}");
         } else if name == "type" && (parent == "sourceList" || parent == "destinationList") {
-            normalized = format!("https://ref.gs1.org/cbv/SDT-{}", normalized);
-        } else if name == "type" && parent == "sensorReport" {
-            normalized = format!("https://gs1.org/voc/{}", normalized);
-        } else if name == "exception" && parent == "sensorReport" {
-            normalized = format!("https://gs1.org/voc/{}", normalized);
+            normalized = format!("https://ref.gs1.org/cbv/SDT-{normalized}");
+        } else if (name == "type" || name == "exception") && parent == "sensorReport" {
+            normalized = format!("https://gs1.org/voc/{normalized}");
         } else if name == "component" && parent == "sensorReport" {
-            normalized = format!("https://ref.gs1.org/cbv/Comp-{}", normalized);
+            normalized = format!("https://ref.gs1.org/cbv/Comp-{normalized}");
         }
     }
     normalized
@@ -410,65 +487,66 @@ fn round_timestamp_to_millis(val: &str) -> String {
             // Find where the fractional part ends (Z or + or -)
             let frac_start = abs_dot_pos + 1;
             let rest = &val[frac_start..];
-            let frac_end = rest.find(|c: char| c == 'Z' || c == '+' || c == '-')
-                .unwrap_or(rest.len());
+            let frac_end = rest.find(['Z', '+', '-']).unwrap_or(rest.len());
             let frac_str = &rest[..frac_end];
-            
+
             if frac_str.len() > 3 {
                 // Parse the fractional digits
-                let digits: Vec<u8> = frac_str.chars()
-                    .filter(|c| c.is_ascii_digit())
+                let digits: Vec<u8> = frac_str
+                    .chars()
+                    .filter(char::is_ascii_digit)
                     .take(4)
                     .map(|c| c as u8 - b'0')
                     .collect();
-                
+
                 if digits.len() >= 4 {
                     // Round: if 4th digit >= 5, round up 3rd digit
-                    let d0 = digits[0] as u32;
-                    let d1 = digits[1] as u32;
-                    let mut d2 = digits[2] as u32;
-                    let d3 = digits[3] as u32;
-                    
+                    let d0 = u32::from(digits[0]);
+                    let d1 = u32::from(digits[1]);
+                    let mut d2 = u32::from(digits[2]);
+                    let d3 = u32::from(digits[3]);
+
                     if d3 >= 5 {
                         d2 += 1;
                     }
-                    
+
                     // Handle carry
                     let ms = d0 * 100 + d1 * 10 + d2;
                     // ms might be 1000 if rounding caused overflow — let chrono handle via nanoseconds
                     let new_frac = format!("{:03}", ms % 1000);
                     let carry = ms / 1000;
-                    
+
                     let prefix = &val[..frac_start];
                     let suffix = &val[frac_start + frac_end..];
-                    
+
                     if carry > 0 {
                         // Need to carry into seconds — rebuild without fractional part and let chrono add
                         // Get base up to the dot
                         let base = &val[..abs_dot_pos];
                         // Actually re-inject carry by re-parsing as a number:
                         // Simplest: remove the fractional part, parse, add 1 second, re-serialize
-                        let no_frac = format!("{}{}", base, suffix);
-                        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&no_frac)
-                            .or_else(|_| chrono::DateTime::parse_from_str(&no_frac, "%Y-%m-%dT%H:%M:%S%z"))
+                        let no_frac = format!("{base}{suffix}");
+                        if let Ok(dt) =
+                            chrono::DateTime::parse_from_rfc3339(&no_frac).or_else(|_| {
+                                chrono::DateTime::parse_from_str(&no_frac, "%Y-%m-%dT%H:%M:%S%z")
+                            })
                         {
                             let dt_bumped = dt + chrono::Duration::seconds(1);
-                            return format!("{}.000{}",
+                            return format!(
+                                "{}.000{}",
                                 &dt_bumped.to_rfc3339()[..19],
                                 if suffix.starts_with('Z') { "Z" } else { suffix }
                             );
                         }
-                        return format!("{}{}{}", prefix, new_frac, suffix);
-                    } else {
-                        return format!("{}{}{}", prefix, new_frac, suffix);
+                        return format!("{prefix}{new_frac}{suffix}");
                     }
+                    return format!("{prefix}{new_frac}{suffix}");
                 }
             }
         }
     }
     val.to_string()
 }
-
 
 fn normalize_numeric(val: &str) -> String {
     // The reference implementation canonicalizes every numeric-looking value
@@ -477,8 +555,9 @@ fn normalize_numeric(val: &str) -> String {
     // required for hash interoperability (see SensorDataExamples.xml vectors).
     // Textual values that f64::from_str also accepts ("inf"/"nan") must pass
     // through untouched, as they do in the reference.
-    if !val.bytes().all(|b| b.is_ascii_digit() || b == b'.' || b == b'-' || b == b'+' || b == b'e' || b == b'E')
-        || val.is_empty()
+    if !val.bytes().all(|b| {
+        b.is_ascii_digit() || b == b'.' || b == b'-' || b == b'+' || b == b'e' || b == b'E'
+    }) || val.is_empty()
     {
         return val.to_string();
     }
@@ -512,7 +591,7 @@ fn is_ignored_field(name: &str, namespaces: &BTreeMap<String, String>) -> bool {
         return true;
     }
 
-    if namespaces.contains_key(&format!("ignore:{}", name)) {
+    if namespaces.contains_key(&format!("ignore:{name}")) {
         return true;
     }
 
@@ -521,8 +600,8 @@ fn is_ignored_field(name: &str, namespaces: &BTreeMap<String, String>) -> bool {
         let prefix = parts[0];
         let local = parts[1];
         if let Some(ns_uri) = namespaces.get(prefix) {
-            let clark = format!("{{{}}}{}", ns_uri, local);
-            if namespaces.contains_key(&format!("ignore:{}", clark)) {
+            let clark = format!("{{{ns_uri}}}{local}");
+            if namespaces.contains_key(&format!("ignore:{clark}")) {
                 return true;
             }
         }
@@ -531,6 +610,9 @@ fn is_ignored_field(name: &str, namespaces: &BTreeMap<String, String>) -> bool {
     false
 }
 
+// A single lookup table mirroring the reference implementation's property
+// order; splitting it would hurt comparability with the spec.
+#[allow(clippy::too_many_lines)]
 fn get_sort_order(parent_name: Option<&str>, name: Option<&str>) -> usize {
     let parent = strip_epcis_namespace(parent_name.unwrap_or(""));
     let name = strip_epcis_namespace(name.unwrap_or(""));
@@ -565,10 +647,12 @@ fn get_sort_order(parent_name: Option<&str>, name: Option<&str>) -> usize {
             "epc" => 0,
             _ => 1000,
         },
-        "quantityList" | "childQuantityList" | "inputQuantityList" | "outputQuantityList" => match name {
-            "quantityElement" => 0,
-            _ => 1000,
-        },
+        "quantityList" | "childQuantityList" | "inputQuantityList" | "outputQuantityList" => {
+            match name {
+                "quantityElement" => 0,
+                _ => 1000,
+            }
+        }
         "quantityElement" => match name {
             "epcClass" => 0,
             "quantity" => 1,
@@ -674,28 +758,44 @@ fn format_leaf_standard(parent_name: Option<&str>, name: &str, value: &str) -> S
     let name_stripped = strip_epcis_namespace(name);
     let mut normalized_val = try_format_web_vocabulary(value);
 
-    if name_stripped == "eventTime" || name_stripped == "time" || name_stripped == "startTime" || name_stripped == "endTime" || name_stripped == "declarationTime" {
+    if name_stripped == "eventTime"
+        || name_stripped == "time"
+        || name_stripped == "startTime"
+        || name_stripped == "endTime"
+        || name_stripped == "declarationTime"
+    {
         normalized_val = normalize_datetime(&normalized_val);
-    } else if name_stripped == "bizStep" || name_stripped == "disposition" || name_stripped == "set" || name_stripped == "unset" || name_stripped == "type" || name_stripped == "exception" || name_stripped == "component" {
+    } else if name_stripped == "bizStep"
+        || name_stripped == "disposition"
+        || name_stripped == "set"
+        || name_stripped == "unset"
+        || name_stripped == "type"
+        || name_stripped == "exception"
+        || name_stripped == "component"
+    {
         normalized_val = normalize_cbv_value(parent_stripped, Some(name_stripped), &normalized_val);
     } else {
         let norm_uri = normalise_uri(&normalized_val);
-        if norm_uri != normalized_val {
-            normalized_val = norm_uri;
-        } else {
+        if norm_uri == normalized_val {
             normalized_val = normalize_numeric(&normalized_val);
+        } else {
+            normalized_val = norm_uri;
         }
     }
 
     if name_stripped == "type" && parent_stripped.is_none() {
-        format!("eventType={}\n", normalized_val)
+        format!("eventType={normalized_val}\n")
     } else {
-        format!("{}={}\n", name_stripped, normalized_val)
+        format!("{name_stripped}={normalized_val}\n")
     }
 }
 
 impl ContextNode {
     /// Generates a pre-hash string for standard EPCIS fields in this node.
+    // Standard fields, biz-list residuals, and user extensions must be emitted
+    // in one pass to preserve spec ordering; splitting would obscure that.
+    #[allow(clippy::too_many_lines)]
+    #[must_use]
     pub fn to_prehash_string(
         &self,
         parent_name: Option<&str>,
@@ -704,9 +804,9 @@ impl ContextNode {
     ) -> String {
         let mut sb = String::new();
 
-        if self.children.is_empty() && self.name.is_some() && self.value.is_some() {
-            let name = self.name.as_ref().unwrap();
-            let value = self.value.as_ref().unwrap();
+        if self.children.is_empty()
+            && let (Some(name), Some(value)) = (self.name.as_deref(), self.value.as_deref())
+        {
             if is_epcis_field(parent_name, name) {
                 sb.push_str(&format_leaf_standard(parent_name, name, value));
             }
@@ -715,8 +815,11 @@ impl ContextNode {
 
         let name_str = self.name.as_deref().unwrap_or("");
         let name_stripped = strip_epcis_namespace(name_str);
-        let is_biz_list_container = name_stripped == "bizTransactionList" || name_stripped == "sourceList" || name_stripped == "destinationList";
-        let should_emit = self.name.is_some() && should_emit_parent_name(name_str, &self.children, is_cbv_2_0);
+        let is_biz_list_container = name_stripped == "bizTransactionList"
+            || name_stripped == "sourceList"
+            || name_stripped == "destinationList";
+        let should_emit =
+            self.name.is_some() && should_emit_parent_name(name_str, &self.children, is_cbv_2_0);
 
         if should_emit {
             // Emit without the EPCIS XML namespace so default-xmlns documents
@@ -725,13 +828,19 @@ impl ContextNode {
             sb.push_str(name_stripped);
         }
 
-        let current_parent = if self.name.is_none() { parent_name } else { self.name.as_deref() };
+        let current_parent = if self.name.is_none() {
+            parent_name
+        } else {
+            self.name.as_deref()
+        };
 
         // For biz list containers, sort children by their prehash string value and emit inline
         if is_biz_list_container {
-            let mut list_children: Vec<String> = self.children.iter().map(|child| {
-                child.to_prehash_string(self.name.as_deref(), is_cbv_2_0, namespaces)
-            }).collect();
+            let mut list_children: Vec<String> = self
+                .children
+                .iter()
+                .map(|child| child.to_prehash_string(self.name.as_deref(), is_cbv_2_0, namespaces))
+                .collect();
             list_children.sort();
             for s in list_children {
                 sb.push_str(&s);
@@ -748,29 +857,42 @@ impl ContextNode {
                 continue;
             }
             let is_ext = child.name.is_some() && !is_epcis_field(current_parent, child_name);
-            
+
             // Treat biz lists (bizTransactionList/sourceList/destinationList) as
             // residuals at the root event level — emit them in a separate sorted block below
             let is_biz_list = {
                 let cn_stripped = strip_epcis_namespace(child_name);
-                parent_name.is_none() && self.name.is_none() &&
-                (cn_stripped == "bizTransactionList" || cn_stripped == "sourceList" || cn_stripped == "destinationList")
+                parent_name.is_none()
+                    && self.name.is_none()
+                    && (cn_stripped == "bizTransactionList"
+                        || cn_stripped == "sourceList"
+                        || cn_stripped == "destinationList")
             };
-            
+
             if !is_ext && !is_biz_list {
-                let next_parent = if self.name.is_none() { parent_name } else { self.name.as_deref() };
+                let next_parent = if self.name.is_none() {
+                    parent_name
+                } else {
+                    self.name.as_deref()
+                };
                 sb.push_str(&child.to_prehash_string(next_parent, is_cbv_2_0, namespaces));
             }
         }
 
         // Collect biz lists as residuals (appended after all standard fields incl sensorElementList)
         if parent_name.is_none() && self.name.is_none() {
-            let mut biz_list_values: Vec<String> = self.children.iter()
+            let mut biz_list_values: Vec<String> = self
+                .children
+                .iter()
                 .filter(|child| {
                     if let Some(ref cn) = child.name {
                         let cn_stripped = strip_epcis_namespace(cn);
-                        cn_stripped == "bizTransactionList" || cn_stripped == "sourceList" || cn_stripped == "destinationList"
-                    } else { false }
+                        cn_stripped == "bizTransactionList"
+                            || cn_stripped == "sourceList"
+                            || cn_stripped == "destinationList"
+                    } else {
+                        false
+                    }
                 })
                 .map(|child| child.to_prehash_string(None, is_cbv_2_0, namespaces))
                 .collect();
@@ -794,10 +916,16 @@ impl ContextNode {
                 // Don't double-emit biz lists as user extensions
                 let is_biz_list = {
                     let cn_stripped = strip_epcis_namespace(child_name);
-                    cn_stripped == "bizTransactionList" || cn_stripped == "sourceList" || cn_stripped == "destinationList"
+                    cn_stripped == "bizTransactionList"
+                        || cn_stripped == "sourceList"
+                        || cn_stripped == "destinationList"
                 };
                 if is_ext && !is_biz_list {
-                    let next_parent = if self.name.is_none() { parent_name } else { self.name.as_deref() };
+                    let next_parent = if self.name.is_none() {
+                        parent_name
+                    } else {
+                        self.name.as_deref()
+                    };
                     let formatted = child.user_extensions_prehash_builder(next_parent, namespaces);
                     if !formatted.is_empty() {
                         ext_values.push(formatted);
@@ -820,7 +948,11 @@ impl ContextNode {
         is_cbv_2_0: bool,
         namespaces: &BTreeMap<String, String>,
     ) {
-        let current_parent = if self.name.is_none() { parent_name } else { self.name.as_deref() };
+        let current_parent = if self.name.is_none() {
+            parent_name
+        } else {
+            self.name.as_deref()
+        };
         self.children.sort_by(|a, b| {
             let a_name = a.name.as_deref();
             let b_name = b.name.as_deref();
@@ -829,15 +961,13 @@ impl ContextNode {
             let b_order = get_sort_order(current_parent, b_name);
 
             match a_order.cmp(&b_order) {
-                std::cmp::Ordering::Equal => {
-                    if a.name.is_none() && b.name.is_none() {
+                std::cmp::Ordering::Equal => match (a.name.as_deref(), b.name.as_deref()) {
+                    (None, None) => {
                         let a_str = a.find_children_string(current_parent, is_cbv_2_0, namespaces);
                         let b_str = b.find_children_string(current_parent, is_cbv_2_0, namespaces);
                         a_str.cmp(&b_str)
-                    } else if a.name.is_some() && b.name.is_some() {
-                        let a_n = a.name.as_ref().unwrap();
-                        let b_n = b.name.as_ref().unwrap();
-                        
+                    }
+                    (Some(a_n), Some(b_n)) => {
                         let a_is_ext = !is_epcis_field(current_parent, a_n);
                         let b_is_ext = !is_epcis_field(current_parent, b_n);
 
@@ -845,11 +975,14 @@ impl ContextNode {
                             let a_ext = a.format_user_extension(namespaces);
                             let b_ext = b.format_user_extension(namespaces);
                             a_ext.cmp(&b_ext)
-                        } else if a.value.is_some() && b.value.is_some() {
-                            let a_val = a.value.as_ref().unwrap();
-                            let b_val = b.value.as_ref().unwrap();
+                        } else if let (Some(a_val), Some(b_val)) =
+                            (a.value.as_deref(), b.value.as_deref())
+                        {
                             let a_n_stripped = strip_epcis_namespace(a_n);
-                            if a_n_stripped == "epc" || a_n_stripped == "epcClass" || a_n_stripped == "id" {
+                            if a_n_stripped == "epc"
+                                || a_n_stripped == "epcClass"
+                                || a_n_stripped == "id"
+                            {
                                 let a_norm = normalise_uri(a_val);
                                 let b_norm = normalise_uri(b_val);
                                 a_norm.cmp(&b_norm)
@@ -857,22 +990,26 @@ impl ContextNode {
                                 a_val.cmp(b_val)
                             }
                         } else {
-                            let a_str = a.find_children_string(current_parent, is_cbv_2_0, namespaces);
-                            let b_str = b.find_children_string(current_parent, is_cbv_2_0, namespaces);
+                            let a_str =
+                                a.find_children_string(current_parent, is_cbv_2_0, namespaces);
+                            let b_str =
+                                b.find_children_string(current_parent, is_cbv_2_0, namespaces);
                             a_str.cmp(&b_str)
                         }
-                    } else if a.name.is_none() {
-                        std::cmp::Ordering::Less
-                    } else {
-                        std::cmp::Ordering::Greater
                     }
-                }
+                    (None, Some(_)) => std::cmp::Ordering::Less,
+                    (Some(_), None) => std::cmp::Ordering::Greater,
+                },
                 ord => ord,
             }
         });
 
         for child in &mut self.children {
-            let next_parent = if self.name.is_none() { parent_name } else { self.name.as_deref() };
+            let next_parent = if self.name.is_none() {
+                parent_name
+            } else {
+                self.name.as_deref()
+            };
             child.sort_children(next_parent, is_cbv_2_0, namespaces);
         }
     }
@@ -884,7 +1021,11 @@ impl ContextNode {
         namespaces: &BTreeMap<String, String>,
     ) -> String {
         let mut cloned = self.clone();
-        let next_parent = if self.name.is_none() { parent_name } else { self.name.as_deref() };
+        let next_parent = if self.name.is_none() {
+            parent_name
+        } else {
+            self.name.as_deref()
+        };
         cloned.sort_children(next_parent, is_cbv_2_0, namespaces);
         let mut sb = String::new();
         for child in &cloned.children {
@@ -897,7 +1038,11 @@ impl ContextNode {
         sb
     }
 
-    fn format_leaf(&self, parent_name: Option<&str>, namespaces: &BTreeMap<String, String>) -> String {
+    fn format_leaf(
+        &self,
+        parent_name: Option<&str>,
+        namespaces: &BTreeMap<String, String>,
+    ) -> String {
         if let Some(ref name) = self.name {
             if let Some(ref val) = self.value {
                 if is_epcis_field(parent_name, name) {
@@ -922,40 +1067,50 @@ impl ContextNode {
         let formatted_val = if normalized_val.is_empty() {
             String::new()
         } else {
-            format!("={}", normalized_val)
+            format!("={normalized_val}")
         };
 
         if name.starts_with('{') {
-            format!("{}{}\n", name, formatted_val)
-        } else if name.contains(':') && !name.starts_with("http://") && !name.starts_with("https://") {
+            format!("{name}{formatted_val}\n")
+        } else if name.contains(':')
+            && !name.starts_with("http://")
+            && !name.starts_with("https://")
+        {
             let parts: Vec<&str> = name.splitn(2, ':').collect();
             let prefix = parts[0];
             let local = parts[1];
             if let Some(ns_uri) = namespaces.get(prefix) {
-                format!("{{{}}}{}{}\n", ns_uri, local, formatted_val)
+                format!("{{{ns_uri}}}{local}{formatted_val}\n")
             } else {
-                format!("{}{}\n", name, formatted_val)
+                format!("{name}{formatted_val}\n")
             }
         } else if name.starts_with("http://") || name.starts_with("https://") {
             let split_idx = name.rfind('#').or_else(|| name.rfind('/'));
             if let Some(idx) = split_idx {
                 let ns = &name[..=idx];
-                let local = &name[idx+1..];
-                format!("{{{}}}{}{}\n", ns, local, formatted_val)
+                let local = &name[idx + 1..];
+                format!("{{{ns}}}{local}{formatted_val}\n")
             } else {
-                format!("{}{}\n", name, formatted_val)
+                format!("{name}{formatted_val}\n")
             }
         } else {
-            format!("{}{}\n", name, formatted_val)
+            format!("{name}{formatted_val}\n")
         }
     }
 
     /// Determines if this is a leaf node carrying user extension data.
+    #[must_use]
     pub fn is_leaf_user_extension(&self, parent_name: Option<&str>) -> bool {
-        self.children.is_empty() && self.name.is_some() && self.value.is_some() && !is_epcis_field(parent_name, self.name.as_ref().unwrap())
+        self.children.is_empty()
+            && self.value.is_some()
+            && self
+                .name
+                .as_deref()
+                .is_some_and(|n| !is_epcis_field(parent_name, n))
     }
 
     /// Traverses this subtree to construct the user extension pre-hash string (recursive formatting).
+    #[must_use]
     pub fn user_extensions_prehash_builder(
         &self,
         parent_name: Option<&str>,
@@ -990,7 +1145,11 @@ impl ContextNode {
             if child_name == "type" && self.name.is_none() && parent_name.is_none() {
                 continue;
             }
-            let next_parent = if self.name.is_none() { parent_name } else { self.name.as_deref() };
+            let next_parent = if self.name.is_none() {
+                parent_name
+            } else {
+                self.name.as_deref()
+            };
             sb.push_str(&child.user_extensions_prehash_builder(next_parent, namespaces));
         }
 
@@ -1000,35 +1159,42 @@ impl ContextNode {
     fn format_user_extension_wrapper(&self, namespaces: &BTreeMap<String, String>) -> String {
         let name = self.name.as_deref().unwrap_or("");
         if name.starts_with('{') {
-            format!("{}\n", name)
-        } else if name.contains(':') && !name.starts_with("http://") && !name.starts_with("https://") {
+            format!("{name}\n")
+        } else if name.contains(':')
+            && !name.starts_with("http://")
+            && !name.starts_with("https://")
+        {
             let parts: Vec<&str> = name.splitn(2, ':').collect();
             let prefix = parts[0];
             let local = parts[1];
             if let Some(ns_uri) = namespaces.get(prefix) {
-                format!("{{{}}}{}\n", ns_uri, local)
+                format!("{{{ns_uri}}}{local}\n")
             } else {
-                format!("{}\n", name)
+                format!("{name}\n")
             }
         } else if name.starts_with("http://") || name.starts_with("https://") {
             let split_idx = name.rfind('#').or_else(|| name.rfind('/'));
             if let Some(idx) = split_idx {
                 let ns = &name[..=idx];
-                let local = &name[idx+1..];
-                format!("{{{}}}{}\n", ns, local)
+                let local = &name[idx + 1..];
+                format!("{{{ns}}}{local}\n")
             } else {
-                format!("{}\n", name)
+                format!("{name}\n")
             }
         } else {
-            format!("{}\n", name)
+            format!("{name}\n")
         }
     }
 
     /// Bubbles up bare user extensions (non-standard, non-namespace prefixed fields) to the event root level.
     pub fn bubble_up_bare_extensions(&mut self, parent_name: Option<&str>) -> Vec<ContextNode> {
         let mut bubbled = vec![];
-        let current_parent = if self.name.is_none() { parent_name } else { self.name.as_deref() };
-        
+        let current_parent = if self.name.is_none() {
+            parent_name
+        } else {
+            self.name.as_deref()
+        };
+
         let is_self_standard = if let Some(ref self_name) = self.name {
             is_epcis_field(parent_name, self_name)
         } else {
@@ -1038,14 +1204,18 @@ impl ContextNode {
         let mut i = 0;
         while i < self.children.len() {
             let child = &mut self.children[i];
-            let child_parent = if self.name.is_none() { parent_name } else { self.name.as_deref() };
+            let child_parent = if self.name.is_none() {
+                parent_name
+            } else {
+                self.name.as_deref()
+            };
             let child_bubbled = child.bubble_up_bare_extensions(child_parent);
             if !child_bubbled.is_empty() {
                 for mut b in child_bubbled {
                     if let Some(ref child_name) = child.name {
                         let child_name_stripped = strip_epcis_namespace(child_name);
                         if let Some(ref mut b_name) = b.name {
-                            *b_name = format!("{}{}", child_name_stripped, b_name);
+                            *b_name = format!("{child_name_stripped}{b_name}");
                         }
                     }
                     bubbled.push(b);
@@ -1065,7 +1235,7 @@ impl ContextNode {
                 } else {
                     false
                 };
-                
+
                 if is_bare_ext {
                     bubbled.push(child);
                 } else {
@@ -1074,21 +1244,25 @@ impl ContextNode {
             }
             self.children = retained;
         }
-        
+
         bubbled
     }
 }
 
 /// Recursively builds a `ContextNode` from a `serde_json::Value`.
+// One match arm per JSON value kind with list-specific child naming; the
+// recursion reads clearest as a single function.
+#[allow(clippy::too_many_lines)]
+#[must_use]
 pub fn json_to_context_node(
     name: Option<String>,
     value: &Value,
     namespaces: &BTreeMap<String, String>,
 ) -> Option<ContextNode> {
-    if let Some(ref n) = name {
-        if is_ignored_field(n, namespaces) {
-            return None;
-        }
+    if let Some(ref n) = name
+        && is_ignored_field(n, namespaces)
+    {
+        return None;
     }
 
     match value {
@@ -1113,33 +1287,54 @@ pub fn json_to_context_node(
             let name_str = name.as_deref().unwrap_or("");
             for item in arr {
                 if item.is_object() {
-                    if name_str == "quantityList" || name_str == "childQuantityList" || name_str == "inputQuantityList" || name_str == "outputQuantityList" {
-                        if let Some(child_node) = json_to_context_node(Some("quantityElement".to_string()), item, namespaces) {
+                    if name_str == "quantityList"
+                        || name_str == "childQuantityList"
+                        || name_str == "inputQuantityList"
+                        || name_str == "outputQuantityList"
+                    {
+                        if let Some(child_node) = json_to_context_node(
+                            Some("quantityElement".to_string()),
+                            item,
+                            namespaces,
+                        ) {
                             children.push(child_node);
                         }
                     } else if name_str == "sensorElementList" {
-                        if let Some(child_node) = json_to_context_node(Some("sensorElement".to_string()), item, namespaces) {
+                        if let Some(child_node) = json_to_context_node(
+                            Some("sensorElement".to_string()),
+                            item,
+                            namespaces,
+                        ) {
                             children.push(child_node);
                         }
                     } else if name_str == "sensorReport" {
-                        if let Some(child_node) = json_to_context_node(Some("sensorReport".to_string()), item, namespaces) {
+                        if let Some(child_node) =
+                            json_to_context_node(Some("sensorReport".to_string()), item, namespaces)
+                        {
                             children.push(child_node);
                         }
-                    } else if name_str == "bizTransactionList" || name_str == "sourceList" || name_str == "destinationList" || name_str == "persistentDisposition" {
+                    } else if name_str == "bizTransactionList"
+                        || name_str == "sourceList"
+                        || name_str == "destinationList"
+                        || name_str == "persistentDisposition"
+                    {
                         if let Some(child_node) = json_to_context_node(None, item, namespaces) {
                             children.push(child_node);
                         }
-                    } else {
-                        if let Some(child_node) = json_to_context_node(name.clone(), item, namespaces) {
-                            children.push(child_node);
-                        }
+                    } else if let Some(child_node) =
+                        json_to_context_node(name.clone(), item, namespaces)
+                    {
+                        children.push(child_node);
                     }
                 } else if item.is_array() {
                     if let Some(child_node) = json_to_context_node(name.clone(), item, namespaces) {
                         children.push(child_node);
                     }
                 } else {
-                    let is_epc_list = name_str == "epcList" || name_str == "childEPCs" || name_str == "inputEPCList" || name_str == "outputEPCList";
+                    let is_epc_list = name_str == "epcList"
+                        || name_str == "childEPCs"
+                        || name_str == "inputEPCList"
+                        || name_str == "outputEPCList";
                     let child_name = if is_epc_list {
                         Some("epc".to_string())
                     } else {
@@ -1162,22 +1357,34 @@ pub fn json_to_context_node(
                 if is_ignored_field(k, namespaces) {
                     continue;
                 }
-                let is_standard_list = k == "epcList" || k == "childEPCs" || k == "inputEPCList" || k == "outputEPCList"
-                    || k == "quantityList" || k == "childQuantityList" || k == "inputQuantityList" || k == "outputQuantityList"
-                    || k == "sensorElementList" || k == "bizTransactionList" || k == "sourceList" || k == "destinationList" || k == "persistentDisposition";
+                let is_standard_list = k == "epcList"
+                    || k == "childEPCs"
+                    || k == "inputEPCList"
+                    || k == "outputEPCList"
+                    || k == "quantityList"
+                    || k == "childQuantityList"
+                    || k == "inputQuantityList"
+                    || k == "outputQuantityList"
+                    || k == "sensorElementList"
+                    || k == "bizTransactionList"
+                    || k == "sourceList"
+                    || k == "destinationList"
+                    || k == "persistentDisposition";
 
                 if v.is_array() && !is_standard_list {
                     if let Value::Array(arr) = v {
                         for item in arr {
-                            if let Some(child_node) = json_to_context_node(Some(k.clone()), item, namespaces) {
+                            if let Some(child_node) =
+                                json_to_context_node(Some(k.clone()), item, namespaces)
+                            {
                                 children.push(child_node);
                             }
                         }
                     }
-                } else {
-                    if let Some(child_node) = json_to_context_node(Some(k.clone()), v, namespaces) {
-                        children.push(child_node);
-                    }
+                } else if let Some(child_node) =
+                    json_to_context_node(Some(k.clone()), v, namespaces)
+                {
+                    children.push(child_node);
                 }
             }
             Some(ContextNode {
@@ -1212,6 +1419,9 @@ fn extract_namespaces_from_json(context_val: &Value, namespaces: &mut BTreeMap<S
 /// # Errors
 ///
 /// Returns `EpcisHashError` if XML parsing fails.
+// Start/Empty/Text/End event handling shares state through the local stack;
+// extracting helpers would only add plumbing.
+#[allow(clippy::too_many_lines)]
 pub fn xml_to_context_node(
     xml_str: &str,
     namespaces: &mut BTreeMap<String, String>,
@@ -1234,17 +1444,14 @@ pub fn xml_to_context_node(
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
                 let mut current_ns = ns_stack.last().cloned().unwrap_or_default();
-                for attr in e.attributes() {
-                    if let Ok(attr) = attr {
-                        let key = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
-                        let val = String::from_utf8_lossy(&attr.value).into_owned();
-                        if key.starts_with("xmlns:") {
-                            let prefix = key.strip_prefix("xmlns:").unwrap().to_string();
-                            current_ns.insert(prefix, val.clone());
-                            namespaces.insert(key.strip_prefix("xmlns:").unwrap().to_string(), val);
-                        } else if key == "xmlns" {
-                            current_ns.insert(String::new(), val);
-                        }
+                for attr in e.attributes().flatten() {
+                    let key = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
+                    let val = String::from_utf8_lossy(&attr.value).into_owned();
+                    if let Some(prefix) = key.strip_prefix("xmlns:") {
+                        current_ns.insert(prefix.to_string(), val.clone());
+                        namespaces.insert(prefix.to_string(), val);
+                    } else if key == "xmlns" {
+                        current_ns.insert(String::new(), val);
                     }
                 }
                 ns_stack.push(current_ns.clone());
@@ -1255,36 +1462,37 @@ pub fn xml_to_context_node(
                     let prefix = parts[0];
                     let local = parts[1];
                     if let Some(ns_uri) = current_ns.get(prefix) {
-                        format!("{{{}}}{}", ns_uri, local)
+                        format!("{{{ns_uri}}}{local}")
                     } else {
                         raw_name.clone()
                     }
                 } else if let Some(ns_uri) = current_ns.get("") {
-                    format!("{{{}}}{}", ns_uri, raw_name)
+                    format!("{{{ns_uri}}}{raw_name}")
                 } else {
                     raw_name.clone()
                 };
 
                 let mut attrs = vec![];
-                for attr in e.attributes() {
-                    if let Ok(attr) = attr {
-                        let key = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
-                        let val = String::from_utf8_lossy(&attr.value).into_owned();
-                        if !key.starts_with("xmlns") && !key.starts_with("xsi:") && !key.starts_with("xsd:") {
-                            let resolved_key = if key.contains(':') {
-                                let parts: Vec<&str> = key.splitn(2, ':').collect();
-                                let prefix = parts[0];
-                                let local = parts[1];
-                                if let Some(ns_uri) = current_ns.get(prefix) {
-                                    format!("{{{}}}{}", ns_uri, local)
-                                } else {
-                                    key.clone()
-                                }
+                for attr in e.attributes().flatten() {
+                    let key = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
+                    let val = String::from_utf8_lossy(&attr.value).into_owned();
+                    if !key.starts_with("xmlns")
+                        && !key.starts_with("xsi:")
+                        && !key.starts_with("xsd:")
+                    {
+                        let resolved_key = if key.contains(':') {
+                            let parts: Vec<&str> = key.splitn(2, ':').collect();
+                            let prefix = parts[0];
+                            let local = parts[1];
+                            if let Some(ns_uri) = current_ns.get(prefix) {
+                                format!("{{{ns_uri}}}{local}")
                             } else {
                                 key.clone()
-                            };
-                            attrs.push((resolved_key, val));
-                        }
+                            }
+                        } else {
+                            key.clone()
+                        };
+                        attrs.push((resolved_key, val));
                     }
                 }
 
@@ -1306,17 +1514,14 @@ pub fn xml_to_context_node(
             }
             Ok(Event::Empty(ref e)) => {
                 let mut current_ns = ns_stack.last().cloned().unwrap_or_default();
-                for attr in e.attributes() {
-                    if let Ok(attr) = attr {
-                        let key = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
-                        let val = String::from_utf8_lossy(&attr.value).into_owned();
-                        if key.starts_with("xmlns:") {
-                            let prefix = key.strip_prefix("xmlns:").unwrap().to_string();
-                            current_ns.insert(prefix, val.clone());
-                            namespaces.insert(key.strip_prefix("xmlns:").unwrap().to_string(), val);
-                        } else if key == "xmlns" {
-                            current_ns.insert(String::new(), val);
-                        }
+                for attr in e.attributes().flatten() {
+                    let key = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
+                    let val = String::from_utf8_lossy(&attr.value).into_owned();
+                    if let Some(prefix) = key.strip_prefix("xmlns:") {
+                        current_ns.insert(prefix.to_string(), val.clone());
+                        namespaces.insert(prefix.to_string(), val);
+                    } else if key == "xmlns" {
+                        current_ns.insert(String::new(), val);
                     }
                 }
 
@@ -1326,12 +1531,12 @@ pub fn xml_to_context_node(
                     let prefix = parts[0];
                     let local = parts[1];
                     if let Some(ns_uri) = current_ns.get(prefix) {
-                        format!("{{{}}}{}", ns_uri, local)
+                        format!("{{{ns_uri}}}{local}")
                     } else {
                         raw_name.clone()
                     }
                 } else if let Some(ns_uri) = current_ns.get("") {
-                    format!("{{{}}}{}", ns_uri, raw_name)
+                    format!("{{{ns_uri}}}{raw_name}")
                 } else {
                     raw_name.clone()
                 };
@@ -1342,29 +1547,30 @@ pub fn xml_to_context_node(
                     children: vec![],
                 };
 
-                for attr in e.attributes() {
-                    if let Ok(attr) = attr {
-                        let key = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
-                        let val = String::from_utf8_lossy(&attr.value).into_owned();
-                        if !key.starts_with("xmlns") && !key.starts_with("xsi:") && !key.starts_with("xsd:") {
-                            let resolved_key = if key.contains(':') {
-                                let parts: Vec<&str> = key.splitn(2, ':').collect();
-                                let prefix = parts[0];
-                                let local = parts[1];
-                                if let Some(ns_uri) = current_ns.get(prefix) {
-                                    format!("{{{}}}{}", ns_uri, local)
-                                } else {
-                                    key.clone()
-                                }
+                for attr in e.attributes().flatten() {
+                    let key = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
+                    let val = String::from_utf8_lossy(&attr.value).into_owned();
+                    if !key.starts_with("xmlns")
+                        && !key.starts_with("xsi:")
+                        && !key.starts_with("xsd:")
+                    {
+                        let resolved_key = if key.contains(':') {
+                            let parts: Vec<&str> = key.splitn(2, ':').collect();
+                            let prefix = parts[0];
+                            let local = parts[1];
+                            if let Some(ns_uri) = current_ns.get(prefix) {
+                                format!("{{{ns_uri}}}{local}")
                             } else {
                                 key.clone()
-                            };
-                            node.children.push(ContextNode {
-                                name: Some(resolved_key),
-                                value: Some(val),
-                                children: vec![],
-                            });
-                        }
+                            }
+                        } else {
+                            key.clone()
+                        };
+                        node.children.push(ContextNode {
+                            name: Some(resolved_key),
+                            value: Some(val),
+                            children: vec![],
+                        });
                     }
                 }
 
@@ -1375,14 +1581,15 @@ pub fn xml_to_context_node(
                 }
             }
             Ok(Event::Text(ref e)) => {
-                if let Some(node) = stack.last_mut() {
-                    if let Ok(decoded) = e.decode() {
-                        let decoded_str = decoded.as_ref();
-                        let unescaped = quick_xml::escape::unescape(decoded_str).unwrap_or(Cow::Borrowed(decoded_str));
-                        let text = unescaped.trim().to_string();
-                        if !text.is_empty() {
-                            node.value = Some(text);
-                        }
+                if let Some(node) = stack.last_mut()
+                    && let Ok(decoded) = e.decode()
+                {
+                    let decoded_str = decoded.as_ref();
+                    let unescaped = quick_xml::escape::unescape(decoded_str)
+                        .unwrap_or(Cow::Borrowed(decoded_str));
+                    let text = unescaped.trim().to_string();
+                    if !text.is_empty() {
+                        node.value = Some(text);
                     }
                 }
             }
@@ -1390,8 +1597,12 @@ pub fn xml_to_context_node(
                 ns_stack.pop();
                 if let Some(mut finished_node) = stack.pop() {
                     if let Some(parent) = stack.last_mut() {
-                        let tag_name = strip_epcis_namespace(finished_node.name.as_deref().unwrap_or(""));
-                        if tag_name == "bizTransaction" || tag_name == "source" || tag_name == "destination" {
+                        let tag_name =
+                            strip_epcis_namespace(finished_node.name.as_deref().unwrap_or(""));
+                        if tag_name == "bizTransaction"
+                            || tag_name == "source"
+                            || tag_name == "destination"
+                        {
                             let type_idx = finished_node.children.iter().position(|c| {
                                 strip_epcis_namespace(c.name.as_deref().unwrap_or("")) == "type"
                             });
@@ -1420,7 +1631,7 @@ pub fn xml_to_context_node(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => return Err(EpcisHashError::XmlParse(format!("{:?}", e))),
+            Err(e) => return Err(EpcisHashError::XmlParse(format!("{e:?}"))),
             _ => {}
         }
         buf.clear();
@@ -1480,6 +1691,62 @@ pub fn compute_canonical_hash(event: &EPCISEvent) -> Result<String, EpcisHashErr
     Ok(compute_hash_from_prehash(&prehash))
 }
 
+/// Collects `ignoreFields` declarations from the document (top level and
+/// query results) and registers them as `ignore:` entries in `namespaces`.
+fn register_ignore_fields(json_val: &Value, namespaces: &mut BTreeMap<String, String>) {
+    let mut ignore_fields = vec![];
+    let mut ignore_key = "repository-x:ignoreFields".to_string();
+    for (k, v) in namespaces.iter() {
+        if v == "https://repository-x.example.com/" {
+            ignore_key = format!("{k}:ignoreFields");
+            break;
+        }
+    }
+    if let Some(fields) = json_val
+        .get(&ignore_key)
+        .or_else(|| json_val.get("ignoreFields"))
+        && let Some(arr) = fields.as_array()
+    {
+        for item in arr {
+            if let Some(s) = item.as_str() {
+                ignore_fields.push(s.to_string());
+            }
+        }
+    }
+    if let Some(body) = json_val.get("epcisBody")
+        && let Some(query_results) = body.get("queryResults")
+        && let Some(fields) = query_results
+            .get(&ignore_key)
+            .or_else(|| query_results.get("ignoreFields"))
+        && let Some(arr) = fields.as_array()
+    {
+        for item in arr {
+            if let Some(s) = item.as_str() {
+                ignore_fields.push(s.to_string());
+            }
+        }
+    }
+    for field in ignore_fields {
+        let resolved = if field.contains(':')
+            && !field.starts_with("http://")
+            && !field.starts_with("https://")
+        {
+            let parts: Vec<&str> = field.splitn(2, ':').collect();
+            let prefix = parts[0];
+            let local = parts[1];
+            if let Some(ns_uri) = namespaces.get(prefix) {
+                format!("{{{ns_uri}}}{local}")
+            } else {
+                field.clone()
+            }
+        } else {
+            field.clone()
+        };
+        namespaces.insert(format!("ignore:{resolved}"), "true".to_string());
+        namespaces.insert(format!("ignore:{field}"), "true".to_string());
+    }
+}
+
 /// Helper to generate pre-hash string from JSON Value.
 ///
 /// # Errors
@@ -1495,52 +1762,7 @@ pub fn canonicalize_json(json_val: &Value, is_cbv_2_0: bool) -> Result<String, E
         extract_namespaces_from_json(context_val, &mut namespaces);
     }
 
-    let mut ignore_fields = vec![];
-    let mut ignore_key = "repository-x:ignoreFields".to_string();
-    for (k, v) in &namespaces {
-        if v == "https://repository-x.example.com/" {
-            ignore_key = format!("{}:ignoreFields", k);
-            break;
-        }
-    }
-    if let Some(fields) = json_val.get(&ignore_key).or_else(|| json_val.get("ignoreFields")) {
-        if let Some(arr) = fields.as_array() {
-            for item in arr {
-                if let Some(s) = item.as_str() {
-                    ignore_fields.push(s.to_string());
-                }
-            }
-        }
-    }
-    if let Some(body) = json_val.get("epcisBody") {
-        if let Some(query_results) = body.get("queryResults") {
-            if let Some(fields) = query_results.get(&ignore_key).or_else(|| query_results.get("ignoreFields")) {
-                if let Some(arr) = fields.as_array() {
-                    for item in arr {
-                        if let Some(s) = item.as_str() {
-                            ignore_fields.push(s.to_string());
-                        }
-                    }
-                }
-            }
-        }
-    }
-    for field in ignore_fields {
-        let resolved = if field.contains(':') && !field.starts_with("http://") && !field.starts_with("https://") {
-            let parts: Vec<&str> = field.splitn(2, ':').collect();
-            let prefix = parts[0];
-            let local = parts[1];
-            if let Some(ns_uri) = namespaces.get(prefix) {
-                format!("{{{}}}{}", ns_uri, local)
-            } else {
-                field.clone()
-            }
-        } else {
-            field.clone()
-        };
-        namespaces.insert(format!("ignore:{}", resolved), "true".to_string());
-        namespaces.insert(format!("ignore:{}", field), "true".to_string());
-    }
+    register_ignore_fields(json_val, &mut namespaces);
 
     // Traverse down to eventList if this is a document wrapper
     let mut event_list_vals = vec![];
@@ -1552,13 +1774,12 @@ pub fn canonicalize_json(json_val: &Value, is_cbv_2_0: bool) -> Result<String, E
                 }
             }
         } else if let Some(query_results) = body.get("queryResults") {
-            if let Some(results_body) = query_results.get("resultsBody") {
-                if let Some(list) = results_body.get("eventList") {
-                    if let Some(arr) = list.as_array() {
-                        for item in arr {
-                            event_list_vals.push(item);
-                        }
-                    }
+            if let Some(results_body) = query_results.get("resultsBody")
+                && let Some(list) = results_body.get("eventList")
+                && let Some(arr) = list.as_array()
+            {
+                for item in arr {
+                    event_list_vals.push(item);
                 }
             }
         } else if let Some(evt) = body.get("event") {
@@ -1570,10 +1791,12 @@ pub fn canonicalize_json(json_val: &Value, is_cbv_2_0: bool) -> Result<String, E
 
     let mut prehashes = vec![];
     for item in event_list_vals {
-        let mut event_node = json_to_context_node(None, item, &namespaces)
-            .ok_or(EpcisHashError::EmptyDocument)?;
+        let mut event_node =
+            json_to_context_node(None, item, &namespaces).ok_or(EpcisHashError::EmptyDocument)?;
 
-        let type_val = event_node.children.iter()
+        let type_val = event_node
+            .children
+            .iter()
             .find(|c| c.name.as_deref() == Some("type"))
             .and_then(|c| c.value.clone())
             .ok_or(EpcisHashError::MissingField { field: "type" })?;
@@ -1583,10 +1806,10 @@ pub fn canonicalize_json(json_val: &Value, is_cbv_2_0: bool) -> Result<String, E
         event_node.children.extend(bubbled);
         event_node.sort_children(None, is_cbv_2_0, &namespaces);
 
-        let mut prehash = format!("eventType={}\n", type_val);
+        let mut prehash = format!("eventType={type_val}\n");
         prehash.push_str(&event_node.to_prehash_string(None, is_cbv_2_0, &namespaces));
 
-        let stripped = prehash.replace('\n', "").replace('\r', "");
+        let stripped = prehash.replace(['\n', '\r'], "");
         prehashes.push(stripped);
     }
 
@@ -1617,7 +1840,7 @@ pub fn canonicalize_xml(xml_str: &str, is_cbv_2_0: bool) -> Result<String, Epcis
         }
     }
     for field in xml_ignore_fields {
-        namespaces.insert(format!("ignore:{}", field), "true".to_string());
+        namespaces.insert(format!("ignore:{field}"), "true".to_string());
     }
 
     let mut event_nodes = vec![];
@@ -1625,7 +1848,9 @@ pub fn canonicalize_xml(xml_str: &str, is_cbv_2_0: bool) -> Result<String, Epcis
 
     let mut prehashes = vec![];
     for mut event_node in event_nodes {
-        let type_val = event_node.name.as_deref()
+        let type_val = event_node
+            .name
+            .as_deref()
             .map(|n| strip_epcis_namespace(n).to_string())
             .ok_or(EpcisHashError::MissingField { field: "eventType" })?;
         event_node.name = None;
@@ -1633,10 +1858,10 @@ pub fn canonicalize_xml(xml_str: &str, is_cbv_2_0: bool) -> Result<String, Epcis
         event_node.children.extend(bubbled);
         event_node.sort_children(None, is_cbv_2_0, &namespaces);
 
-        let mut prehash = format!("eventType={}\n", type_val);
+        let mut prehash = format!("eventType={type_val}\n");
         prehash.push_str(&event_node.to_prehash_string(None, is_cbv_2_0, &namespaces));
 
-        let stripped = prehash.replace('\n', "").replace('\r', "");
+        let stripped = prehash.replace(['\n', '\r'], "");
         prehashes.push(stripped);
     }
 
@@ -1649,8 +1874,15 @@ pub fn compute_hash_from_prehash(prehash: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(prehash.as_bytes());
     let hash_result = hasher.finalize();
-    let hash_hex: String = hash_result.iter().map(|b| format!("{:02x}", b)).collect();
-    format!("ni:///sha-256;{}?ver=CBV2.0", hash_hex)
+    let hash_hex = hash_result.iter().fold(
+        String::with_capacity(hash_result.len() * 2),
+        |mut acc, b| {
+            use std::fmt::Write;
+            let _ = write!(acc, "{b:02x}");
+            acc
+        },
+    );
+    format!("ni:///sha-256;{hash_hex}?ver=CBV2.0")
 }
 
 #[cfg(test)]
@@ -1769,7 +2001,8 @@ mod unit_tests {
 
     #[test]
     fn test_normalize_cbv_sensor_report_exception() {
-        let result = normalize_cbv_value(Some("sensorReport"), Some("exception"), "ALARM_CONDITION");
+        let result =
+            normalize_cbv_value(Some("sensorReport"), Some("exception"), "ALARM_CONDITION");
         assert_eq!(result, "https://gs1.org/voc/ALARM_CONDITION");
     }
 
@@ -1834,14 +2067,14 @@ mod unit_tests {
         let urn = "urn:epc:id:sgtin:4012345.011111.987";
         let result = normalise_uri(urn);
         // Should convert to GS1 Web Vocabulary form
-        assert!(result.starts_with("https://id.gs1.org/"), "got: {}", result);
+        assert!(result.starts_with("https://id.gs1.org/"), "got: {result}");
     }
 
     #[test]
     fn test_normalise_sscc() {
         let urn = "urn:epc:id:sscc:4012345.0111111111";
         let result = normalise_uri(urn);
-        assert!(result.starts_with("https://id.gs1.org/"), "got: {}", result);
+        assert!(result.starts_with("https://id.gs1.org/"), "got: {result}");
     }
 
     #[test]
@@ -1857,7 +2090,10 @@ mod unit_tests {
         // gs1:shipping → https://ref.gs1.org/cbv/BizStep-shipping
         let result = try_format_web_vocabulary("gs1:shipping");
         // Should expand gs1: prefix
-        assert!(!result.starts_with("gs1:"), "expected expansion, got: {}", result);
+        assert!(
+            !result.starts_with("gs1:"),
+            "expected expansion, got: {result}"
+        );
     }
 
     #[test]
@@ -1870,7 +2106,11 @@ mod unit_tests {
 
     #[test]
     fn test_bubble_up_bare_extensions_empty() {
-        let mut root = ContextNode { name: None, value: None, children: vec![] };
+        let mut root = ContextNode {
+            name: None,
+            value: None,
+            children: vec![],
+        };
         root.bubble_up_bare_extensions(None);
         assert!(root.children.is_empty());
     }
@@ -1953,5 +2193,3 @@ pub fn hash_json_document_wasm(json_str: &str, is_cbv_2_0: bool) -> Result<Strin
     }
     Ok(hashes.join("\n"))
 }
-
-

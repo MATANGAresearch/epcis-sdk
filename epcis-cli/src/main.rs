@@ -1,8 +1,8 @@
-use std::io::{self, Read};
-use std::fs;
 use clap::Parser;
 use epcis_hash::{canonicalize_json, canonicalize_xml, compute_hash_from_prehash};
-use epcis_translate::{Sgtin, Sscc, Sgln, Grai, Giai};
+use epcis_translate::{Giai, Grai, Sgln, Sgtin, Sscc};
+use std::fs;
+use std::io::{self, Read};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -50,23 +50,28 @@ fn handle_translation(key: &str, prefix_len: usize, base_url: &str) -> Result<St
         let scheme = parts[3];
         match scheme {
             "sgtin" => {
-                let sgtin = Sgtin::from_urn(key).map_err(|e| format!("Failed to parse SGTIN: {:?}", e))?;
+                let sgtin =
+                    Sgtin::from_urn(key).map_err(|e| format!("Failed to parse SGTIN: {:?}", e))?;
                 Ok(sgtin.to_digital_link(base_url))
             }
             "sscc" => {
-                let sscc = Sscc::from_urn(key).map_err(|e| format!("Failed to parse SSCC: {:?}", e))?;
+                let sscc =
+                    Sscc::from_urn(key).map_err(|e| format!("Failed to parse SSCC: {:?}", e))?;
                 Ok(sscc.to_digital_link(base_url))
             }
             "sgln" => {
-                let sgln = Sgln::from_urn(key).map_err(|e| format!("Failed to parse SGLN: {:?}", e))?;
+                let sgln =
+                    Sgln::from_urn(key).map_err(|e| format!("Failed to parse SGLN: {:?}", e))?;
                 Ok(sgln.to_digital_link(base_url))
             }
             "grai" => {
-                let grai = Grai::from_urn(key).map_err(|e| format!("Failed to parse GRAI: {:?}", e))?;
+                let grai =
+                    Grai::from_urn(key).map_err(|e| format!("Failed to parse GRAI: {:?}", e))?;
                 Ok(grai.to_digital_link(base_url))
             }
             "giai" => {
-                let giai = Giai::from_urn(key).map_err(|e| format!("Failed to parse GIAI: {:?}", e))?;
+                let giai =
+                    Giai::from_urn(key).map_err(|e| format!("Failed to parse GIAI: {:?}", e))?;
                 Ok(giai.to_digital_link(base_url))
             }
             other => Err(format!("Unsupported URN scheme: {}", other)),
@@ -74,19 +79,24 @@ fn handle_translation(key: &str, prefix_len: usize, base_url: &str) -> Result<St
     } else if key.starts_with("http") || key.contains('/') {
         // Translate from Digital Link to URN
         if key.contains("/01/") {
-            let sgtin = Sgtin::from_digital_link(key, prefix_len).map_err(|e| format!("Failed to parse SGTIN DL: {:?}", e))?;
+            let sgtin = Sgtin::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse SGTIN DL: {:?}", e))?;
             Ok(sgtin.to_urn())
         } else if key.contains("/00/") {
-            let sscc = Sscc::from_digital_link(key, prefix_len).map_err(|e| format!("Failed to parse SSCC DL: {:?}", e))?;
+            let sscc = Sscc::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse SSCC DL: {:?}", e))?;
             Ok(sscc.to_urn())
         } else if key.contains("/414/") {
-            let sgln = Sgln::from_digital_link(key, prefix_len).map_err(|e| format!("Failed to parse SGLN DL: {:?}", e))?;
+            let sgln = Sgln::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse SGLN DL: {:?}", e))?;
             Ok(sgln.to_urn())
         } else if key.contains("/8003/") {
-            let grai = Grai::from_digital_link(key, prefix_len).map_err(|e| format!("Failed to parse GRAI DL: {:?}", e))?;
+            let grai = Grai::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse GRAI DL: {:?}", e))?;
             Ok(grai.to_urn())
         } else if key.contains("/8004/") {
-            let giai = Giai::from_digital_link(key, prefix_len).map_err(|e| format!("Failed to parse GIAI DL: {:?}", e))?;
+            let giai = Giai::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse GIAI DL: {:?}", e))?;
             Ok(giai.to_urn())
         } else {
             Err("Could not detect GS1 Application Identifier (AI) in Digital Link path (expected e.g. /01/ SGTIN, /00/ SSCC, /414/ SGLN, /8003/ GRAI, /8004/ GIAI)".to_string())

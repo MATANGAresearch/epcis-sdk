@@ -6,13 +6,17 @@ use thiserror::Error;
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ValidationError {
     /// An extension key is not qualified (must contain a namespace prefix with a colon, or be a full URI)
-    #[error("Extension key '{key}' is not qualified (must be a valid URI or contain a namespace prefix like prefix:name)")]
+    #[error(
+        "Extension key '{key}' is not qualified (must be a valid URI or contain a namespace prefix like prefix:name)"
+    )]
     UnqualifiedKey {
         /// The unqualified key
         key: String,
     },
     /// An extension key is in a reserved/standard namespace but is not recognized
-    #[error("Extension key '{key}' uses a standard namespace prefix but is not recognized as a valid extension")]
+    #[error(
+        "Extension key '{key}' uses a standard namespace prefix but is not recognized as a valid extension"
+    )]
     InvalidStandardPrefix {
         /// The key using standard namespace prefix
         key: String,
@@ -28,7 +32,9 @@ pub enum ValidationError {
 ///
 /// # Errors
 /// Returns `ValidationError` if any key is unqualified or invalid.
-pub fn validate_extension_keys(extensions: &serde_json::Map<String, serde_json::Value>) -> Result<(), ValidationError> {
+pub fn validate_extension_keys(
+    extensions: &serde_json::Map<String, serde_json::Value>,
+) -> Result<(), ValidationError> {
     for key in extensions.keys() {
         // Skip context declarations
         if key.starts_with('@') {
@@ -61,7 +67,8 @@ pub fn validate_extension_keys(extensions: &serde_json::Map<String, serde_json::
 
         // Check if it's a URI or has a namespace colon
         let has_colon = key.contains(':');
-        let is_uri = key.starts_with("http://") || key.starts_with("https://") || key.starts_with("urn:");
+        let is_uri =
+            key.starts_with("http://") || key.starts_with("https://") || key.starts_with("urn:");
 
         if !has_colon && !is_uri {
             return Err(ValidationError::UnqualifiedKey { key: key.clone() });
@@ -79,7 +86,10 @@ mod tests {
     fn test_valid_extensions() {
         let mut ext = serde_json::Map::new();
         ext.insert("custom:myField".to_string(), json!("value"));
-        ext.insert("http://example.com/vocab#anotherField".to_string(), json!(123));
+        ext.insert(
+            "http://example.com/vocab#anotherField".to_string(),
+            json!(123),
+        );
         ext.insert("urn:uuid:12345".to_string(), json!(true));
 
         assert_eq!(validate_extension_keys(&ext), Ok(()));
