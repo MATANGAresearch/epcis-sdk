@@ -23,7 +23,7 @@ Every EPCIS event answers the **5 Ws and How**:
 
 This workspace consists of four modular crates:
 
-1. **[`epcis-models`](./epcis-models)**: Type-safe event models (`ObjectEvent`, `AggregationEvent`, `TransformationEvent`, etc.) and strum-backed CBV (Core Business Vocabulary) enum systems. Fully serializable to and from JSON/JSON-LD and XML.
+1. **[`epcis-models`](./epcis-models)**: Type-safe event models (`ObjectEvent`, `AggregationEvent`, `TransformationEvent`, etc.) and strum-backed CBV (Core Business Vocabulary) enum systems. Fully serializable to and from JSON/JSON-LD. (An internal XML round-trip format is provided; parsing standard EPCIS 2.0 XML documents into typed models is planned — `epcis-hash` already consumes standard EPCIS XML for hashing.)
 2. **[`epcis-hash`](./epcis-hash)**: Deterministic, representation-agnostic canonical SHA-256 event hashing conforming to GS1 and `OpenEPCIS` specifications. Supports both XML and JSON/JSON-LD input payloads.
 3. **[`epcis-translate`](./epcis-translate)**: Zero-allocation, bidirectional translators for converting GS1 keys (SGTIN, SSCC, SGLN, GRAI, GIAI) between EPC URN and GS1 Digital Link path formats without heap allocation.
 4. **[`epcis-cli`](./epcis-cli)**: A command line binary wrapper for running event hashing and GS1 identifier translation directly from the terminal.

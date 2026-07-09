@@ -235,21 +235,30 @@ pub struct SensorMetadata {
     /// Time when the sensor metadata was generated
     #[serde(skip_serializing_if = "Option::is_none")]
     pub time: Option<DateTime<Utc>>,
+    /// Start of the period covered by the sensor element
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_time: Option<DateTime<Utc>>,
+    /// End of the period covered by the sensor element
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_time: Option<DateTime<Utc>>,
     /// Device identifier
     #[serde(rename = "deviceID", skip_serializing_if = "Option::is_none")]
     pub device_id: Option<String>,
     /// URI pointing to device metadata details
-    #[serde(rename = "deviceMetadataURI", skip_serializing_if = "Option::is_none")]
-    pub device_metadata_uri: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_metadata: Option<String>,
     /// URI pointing to raw sensor data
-    #[serde(rename = "rawDataURI", skip_serializing_if = "Option::is_none")]
-    pub raw_data_uri: Option<String>,
-    /// URI pointing to parsed data content
-    #[serde(rename = "dataContentURI", skip_serializing_if = "Option::is_none")]
-    pub data_content_uri: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_data: Option<String>,
+    /// URI describing the data processing method applied
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_processing_method: Option<String>,
     /// URI pointing to business logic rules applied to the sensor
-    #[serde(rename = "bizRulesURI", skip_serializing_if = "Option::is_none")]
-    pub biz_rules_uri: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub biz_rules: Option<String>,
+    /// Extra custom fields (namespace-qualified extensions)
+    #[serde(flatten)]
+    pub extensions: serde_json::Map<String, serde_json::Value>,
 }
 
 /// A specific sensor report (e.g., temperature reading).
@@ -257,29 +266,38 @@ pub struct SensorMetadata {
 #[serde(rename_all = "camelCase")]
 pub struct SensorReport {
     /// Type of measurement (e.g., temperature, relative humidity)
-    #[serde(rename = "type")]
-    pub r#type: String,
-    /// Numerical value of the sensor reading
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub r#type: Option<String>,
+    /// Exception condition raised by the sensor (e.g. `ALARM_CONDITION`)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub value: Option<f64>,
-    /// Unit of measure (e.g. CEL)
+    pub exception: Option<String>,
+    /// Device identifier
+    #[serde(rename = "deviceID", skip_serializing_if = "Option::is_none")]
+    pub device_id: Option<String>,
+    /// URI pointing to device metadata details
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub uom: Option<String>,
-    /// Processor component responsible for the sensor reading
+    pub device_metadata: Option<String>,
+    /// URI pointing to raw sensor data
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sensor_processor: Option<String>,
+    pub raw_data: Option<String>,
+    /// URI describing the data processing method applied
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_processing_method: Option<String>,
     /// Time when the reading occurred
     #[serde(skip_serializing_if = "Option::is_none")]
     pub time: Option<DateTime<Utc>>,
-    /// Microsecond offset from event time
+    /// Microorganism measured (if applicable)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub microsecond_offset: Option<i32>,
+    pub microorganism: Option<String>,
     /// Chemical substance measured (if applicable)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chemical_substance: Option<String>,
-    /// Data value in string/URI format
+    /// Numerical value of the sensor reading
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_value: Option<String>,
+    pub value: Option<f64>,
+    /// Component the reading refers to (e.g. `Exterior`)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub component: Option<String>,
     /// String representation value
     #[serde(skip_serializing_if = "Option::is_none")]
     pub string_value: Option<String>,
@@ -292,6 +310,33 @@ pub struct SensorReport {
     /// URI value
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uri_value: Option<String>,
+    /// Minimum value observed over the report period
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_value: Option<f64>,
+    /// Maximum value observed over the report period
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_value: Option<f64>,
+    /// Mean value observed over the report period
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mean_value: Option<f64>,
+    /// Standard deviation over the report period
+    #[serde(rename = "sDev", skip_serializing_if = "Option::is_none")]
+    pub s_dev: Option<f64>,
+    /// Percentile rank associated with `percValue`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub perc_rank: Option<f64>,
+    /// Value at the percentile rank given by `percRank`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub perc_value: Option<f64>,
+    /// Unit of measure (e.g. CEL)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uom: Option<String>,
+    /// Coordinate reference system used for geographic readings
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coordinate_reference_system: Option<String>,
+    /// Extra custom fields (namespace-qualified extensions)
+    #[serde(flatten)]
+    pub extensions: serde_json::Map<String, serde_json::Value>,
 }
 
 /// A sensor element grouping sensor metadata and reports.

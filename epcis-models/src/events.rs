@@ -94,6 +94,9 @@ pub struct ObjectEvent {
     /// Persistent state changes of disposition
     #[serde(skip_serializing_if = "Option::is_none")]
     pub persistent_disposition: Option<PersistentDisposition>,
+    /// Instance/lot master data describing the objects (namespace-qualified entries)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ilmd: Option<serde_json::Map<String, serde_json::Value>>,
 
     /// Extra custom JSON elements
     #[serde(flatten)]
@@ -122,6 +125,7 @@ impl ObjectEvent {
             destination_list: None,
             sensor_element_list: None,
             persistent_disposition: None,
+            ilmd: None,
             extensions: serde_json::Map::new(),
         }
     }
@@ -315,6 +319,9 @@ pub struct TransformationEvent {
     /// Sensor element list
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sensor_element_list: Option<Vec<SensorElement>>,
+    /// Instance/lot master data describing the outputs (namespace-qualified entries)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ilmd: Option<serde_json::Map<String, serde_json::Value>>,
 
     /// Extra custom fields
     #[serde(flatten)]
@@ -344,6 +351,7 @@ impl TransformationEvent {
             source_list: None,
             destination_list: None,
             sensor_element_list: None,
+            ilmd: None,
             extensions: serde_json::Map::new(),
         }
     }

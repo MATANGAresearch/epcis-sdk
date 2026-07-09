@@ -210,7 +210,14 @@ impl EPCISDocument {
         }
     }
 
-    /// Parses an EPCISDocument from an XML string.
+    /// Parses an `EPCISDocument` from XML produced by [`EPCISDocument::to_xml`].
+    ///
+    /// **Limitation:** this reads this SDK's own XML rendering of the JSON
+    /// document shape (e.g. `<type>ObjectEvent</type>` elements). It does
+    /// **not** parse standard EPCIS 2.0 XML documents, which use
+    /// `<EventList><ObjectEvent>...` element structure and XML namespaces.
+    /// To hash standard EPCIS XML, use `epcis_hash::canonicalize_xml`.
+    /// Native EPCIS 2.0 XML document parsing is planned as a follow-up.
     ///
     /// # Errors
     ///
@@ -223,7 +230,13 @@ impl EPCISDocument {
         })
     }
 
-    /// Serializes the EPCISDocument to an XML string.
+    /// Serializes the `EPCISDocument` to an XML string.
+    ///
+    /// **Limitation:** the output is this SDK's own XML rendering of the JSON
+    /// document shape, suitable for round-tripping via
+    /// [`EPCISDocument::from_xml`]. It is **not** a standard EPCIS 2.0 XML
+    /// document and will not validate against the EPCIS XSD. Native EPCIS 2.0
+    /// XML serialization is planned as a follow-up.
     ///
     /// # Errors
     ///

@@ -83,6 +83,47 @@ fn test_canonical_event_hashing() {
 }
 
 #[test]
+fn test_sensor_document_roundtrip_preserves_all_fields() {
+    use std::fs;
+
+    // Typed models must not silently drop standard sensor fields
+    // (component, coordinateReferenceSystem, exception, ...) or
+    // namespace-qualified extensions inside sensorReport.
+    for file in [
+        "../research-repos/epcis-python/tests/examples/epcisDocWithSensorComponent.jsonld",
+        "../research-repos/epcis-python/tests/examples/CertificationInfoAndSensorReportWithCRS.jsonld",
+    ] {
+        let content = fs::read_to_string(file).unwrap();
+        let doc: EPCISDocument = serde_json::from_str(&content)
+            .unwrap_or_else(|e| panic!("failed to parse {file}: {e}"));
+        let roundtrip = serde_json::to_value(&doc).unwrap();
+        let original: serde_json::Value = serde_json::from_str(&content).unwrap();
+
+        let events = original["epcisBody"]["eventList"].as_array().unwrap();
+        for (i, event) in events.iter().enumerate() {
+            let Some(elements) = event.get("sensorElementList").and_then(|v| v.as_array()) else {
+                continue;
+            };
+            for (j, element) in elements.iter().enumerate() {
+                let reports = element["sensorReport"].as_array().unwrap();
+                for (k, report) in reports.iter().enumerate() {
+                    let rt_report = &roundtrip["epcisBody"]["eventList"][i]["sensorElementList"][j]
+                        ["sensorReport"][k];
+                    let orig_keys: std::collections::BTreeSet<&String> =
+                        report.as_object().unwrap().keys().collect();
+                    let rt_keys: std::collections::BTreeSet<&String> =
+                        rt_report.as_object().unwrap().keys().collect();
+                    assert_eq!(
+                        orig_keys, rt_keys,
+                        "sensorReport keys lost in {file} event {i} element {j} report {k}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn test_typed_transformation_event_hash_matches_spec_json() {
     use epcis_models::TransformationEvent;
 
