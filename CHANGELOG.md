@@ -4,7 +4,7 @@ All notable changes to this workspace are documented here. Versions follow
 [Semantic Versioning](https://semver.org); while below 1.0.0, minor bumps may
 contain breaking changes.
 
-## 0.2.0 — 2026-07-09
+## 0.2.0 — 2026-07-10
 
 This release fixes correctness bugs found in a full audit against the official
 GS1/OpenEPCIS reference test vectors. Several fixes change serialized output
@@ -61,6 +61,29 @@ or canonical hashes, hence the minor version bump.
   `"0"` (GS1 canonical form, matching `epcis-hash`), and
   `Sgln::from_digital_link` accepts a plain `/414/GLN` without a qualifier,
   defaulting the extension to `"0"`.
+
+### Completeness follow-ups
+
+- **EPCISHeader master data** round-trips through XML
+  (`EPCISMasterData`/`VocabularyList`, including structured attribute values
+  and child-id lists). Header models renamed to match the EPCIS 2.0 JSON
+  schema: `Vocabulary` holds `vocabularyElementList` of `VocabularyElement`;
+  `VocabularyAttribute` serializes its value as `attribute` (breaking).
+- **`EPCISQueryDocument`** is a new typed document
+  (`epcisBody.queryResults.resultsBody.eventList`) with `from_xml`/`to_xml`,
+  accepting both the standard envelope and the lenient root-level shape;
+  hash-faithful against both official query vectors. `canonicalize_xml` finds
+  `ignoreFields` instructions at any envelope level.
+- **Full GS1 key coverage in `epcis-translate`**: PGLN, GDTI, GSRN, GSRNP,
+  SGCN, GINC, GSIN, ITIP, UPUI, CPI, and LGTIN join the original five, all
+  wired into the CLI and wasm dispatchers. Each type's Digital Link output is
+  test-pinned to `epcis_hash::normalise_uri`.
+- **Sorting is no longer quadratic**: canonicalization sort keys are computed
+  once per node (`sort_by_cached_key` over depth-first-sorted subtrees)
+  instead of once per comparison; `ContextNode::sort_children` loses its
+  unused `is_cbv_2_0` parameter (breaking for direct callers).
+- **Fuzz targets** (`fuzz/`, excluded from the workspace) cover all URN and
+  Digital Link parsers, both canonicalizers, and typed XML document parsing.
 
 ### Native EPCIS 2.0 XML support (epcis-models)
 

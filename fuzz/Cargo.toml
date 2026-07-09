@@ -1,0 +1,50 @@
+[package]
+name = "epcis-sdk-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1"
+epcis-models = { path = "../epcis-models" }
+epcis-hash = { path = "../epcis-hash" }
+epcis-translate = { path = "../epcis-translate" }
+
+[[bin]]
+name = "translate_urn"
+path = "fuzz_targets/translate_urn.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "translate_dl"
+path = "fuzz_targets/translate_dl.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "hash_json"
+path = "fuzz_targets/hash_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "hash_xml"
+path = "fuzz_targets/hash_xml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "models_xml"
+path = "fuzz_targets/models_xml.rs"
+test = false
+doc = false
+bench = false
