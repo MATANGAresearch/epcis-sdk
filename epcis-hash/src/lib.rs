@@ -942,10 +942,14 @@ impl ContextNode {
     }
 
     /// Recursively sorts the children of this node according to EPCIS hash rules.
+    ///
+    /// Grandchildren are sorted first (depth-first), so each child's sort key
+    /// can be derived from its already-sorted subtree and computed exactly
+    /// once — avoiding the quadratic clone-and-resort the comparator would
+    /// otherwise need on large EPC or quantity lists.
     pub fn sort_children(
         &mut self,
         parent_name: Option<&str>,
-        is_cbv_2_0: bool,
         namespaces: &BTreeMap<String, String>,
     ) {
         let current_parent = if self.name.is_none() {
@@ -953,86 +957,60 @@ impl ContextNode {
         } else {
             self.name.as_deref()
         };
-        self.children.sort_by(|a, b| {
-            let a_name = a.name.as_deref();
-            let b_name = b.name.as_deref();
-
-            let a_order = get_sort_order(current_parent, a_name);
-            let b_order = get_sort_order(current_parent, b_name);
-
-            match a_order.cmp(&b_order) {
-                std::cmp::Ordering::Equal => match (a.name.as_deref(), b.name.as_deref()) {
-                    (None, None) => {
-                        let a_str = a.find_children_string(current_parent, is_cbv_2_0, namespaces);
-                        let b_str = b.find_children_string(current_parent, is_cbv_2_0, namespaces);
-                        a_str.cmp(&b_str)
-                    }
-                    (Some(a_n), Some(b_n)) => {
-                        let a_is_ext = !is_epcis_field(current_parent, a_n);
-                        let b_is_ext = !is_epcis_field(current_parent, b_n);
-
-                        if a_is_ext && b_is_ext {
-                            let a_ext = a.format_user_extension(namespaces);
-                            let b_ext = b.format_user_extension(namespaces);
-                            a_ext.cmp(&b_ext)
-                        } else if let (Some(a_val), Some(b_val)) =
-                            (a.value.as_deref(), b.value.as_deref())
-                        {
-                            let a_n_stripped = strip_epcis_namespace(a_n);
-                            if a_n_stripped == "epc"
-                                || a_n_stripped == "epcClass"
-                                || a_n_stripped == "id"
-                            {
-                                let a_norm = normalise_uri(a_val);
-                                let b_norm = normalise_uri(b_val);
-                                a_norm.cmp(&b_norm)
-                            } else {
-                                a_val.cmp(b_val)
-                            }
-                        } else {
-                            let a_str =
-                                a.find_children_string(current_parent, is_cbv_2_0, namespaces);
-                            let b_str =
-                                b.find_children_string(current_parent, is_cbv_2_0, namespaces);
-                            a_str.cmp(&b_str)
-                        }
-                    }
-                    (None, Some(_)) => std::cmp::Ordering::Less,
-                    (Some(_), None) => std::cmp::Ordering::Greater,
-                },
-                ord => ord,
-            }
-        });
 
         for child in &mut self.children {
-            let next_parent = if self.name.is_none() {
-                parent_name
-            } else {
-                self.name.as_deref()
-            };
-            child.sort_children(next_parent, is_cbv_2_0, namespaces);
+            child.sort_children(current_parent, namespaces);
         }
+
+        self.children.sort_by_cached_key(|child| {
+            let order = get_sort_order(current_parent, child.name.as_deref());
+            match child.name.as_deref() {
+                // Unnamed grouping nodes sort before named siblings of the
+                // same order, keyed by their concatenated content.
+                None => (
+                    order,
+                    0u8,
+                    child.find_children_string(current_parent, namespaces),
+                ),
+                Some(name) => {
+                    let key = if !is_epcis_field(current_parent, name) {
+                        child.format_user_extension(namespaces)
+                    } else if let Some(value) = child.value.as_deref() {
+                        let stripped = strip_epcis_namespace(name);
+                        if stripped == "epc" || stripped == "epcClass" || stripped == "id" {
+                            normalise_uri(value)
+                        } else {
+                            value.to_string()
+                        }
+                    } else {
+                        child.find_children_string(current_parent, namespaces)
+                    };
+                    (order, 1u8, key)
+                }
+            }
+        });
     }
 
+    /// Concatenates this subtree's leaf content in (already sorted) order.
+    ///
+    /// Only valid once the subtree has been sorted, which `sort_children`
+    /// guarantees by recursing depth-first before keying.
     fn find_children_string(
         &self,
         parent_name: Option<&str>,
-        is_cbv_2_0: bool,
         namespaces: &BTreeMap<String, String>,
     ) -> String {
-        let mut cloned = self.clone();
         let next_parent = if self.name.is_none() {
             parent_name
         } else {
             self.name.as_deref()
         };
-        cloned.sort_children(next_parent, is_cbv_2_0, namespaces);
         let mut sb = String::new();
-        for child in &cloned.children {
+        for child in &self.children {
             if child.value.is_some() {
                 sb.push_str(&child.format_leaf(next_parent, namespaces));
             } else {
-                sb.push_str(&child.find_children_string(next_parent, is_cbv_2_0, namespaces));
+                sb.push_str(&child.find_children_string(next_parent, namespaces));
             }
         }
         sb
@@ -1804,7 +1782,7 @@ pub fn canonicalize_json(json_val: &Value, is_cbv_2_0: bool) -> Result<String, E
         event_node.name = None;
         let bubbled = event_node.bubble_up_bare_extensions(None);
         event_node.children.extend(bubbled);
-        event_node.sort_children(None, is_cbv_2_0, &namespaces);
+        event_node.sort_children(None, &namespaces);
 
         let mut prehash = format!("eventType={type_val}\n");
         prehash.push_str(&event_node.to_prehash_string(None, is_cbv_2_0, &namespaces));
@@ -1856,7 +1834,7 @@ pub fn canonicalize_xml(xml_str: &str, is_cbv_2_0: bool) -> Result<String, Epcis
         event_node.name = None;
         let bubbled = event_node.bubble_up_bare_extensions(None);
         event_node.children.extend(bubbled);
-        event_node.sort_children(None, is_cbv_2_0, &namespaces);
+        event_node.sort_children(None, &namespaces);
 
         let mut prehash = format!("eventType={type_val}\n");
         prehash.push_str(&event_node.to_prehash_string(None, is_cbv_2_0, &namespaces));
