@@ -13,4 +13,8 @@ pub enum EpcisModelError {
     /// Invalid GS1 URI.
     #[error("invalid URI: {0}")]
     InvalidUri(String),
+
+    /// Malformed or non-EPCIS XML document.
+    #[error("invalid EPCIS XML: {0}")]
+    InvalidXml(String),
 }

@@ -125,16 +125,20 @@ impl std::fmt::Display for ReadPointId {
 }
 
 /// The physical location where the event took place.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReadPoint {
     /// Unique identifier of the read point
     pub id: ReadPointId,
+    /// Extra custom fields (namespace-qualified extensions)
+    #[serde(flatten)]
+    pub extensions: serde_json::Map<String, serde_json::Value>,
 }
 
 impl From<&'static str> for ReadPoint {
     fn from(id: &'static str) -> Self {
         ReadPoint {
             id: ReadPointId::from(id),
+            extensions: serde_json::Map::new(),
         }
     }
 }
@@ -143,6 +147,7 @@ impl From<String> for ReadPoint {
     fn from(id: String) -> Self {
         ReadPoint {
             id: ReadPointId::from(id),
+            extensions: serde_json::Map::new(),
         }
     }
 }
@@ -170,16 +175,20 @@ impl std::fmt::Display for BizLocationId {
 }
 
 /// The business location where the objects are expected to be after the event.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BizLocation {
     /// Unique identifier of the business location
     pub id: BizLocationId,
+    /// Extra custom fields (namespace-qualified extensions)
+    #[serde(flatten)]
+    pub extensions: serde_json::Map<String, serde_json::Value>,
 }
 
 impl From<&'static str> for BizLocation {
     fn from(id: &'static str) -> Self {
         BizLocation {
             id: BizLocationId::from(id),
+            extensions: serde_json::Map::new(),
         }
     }
 }
@@ -188,6 +197,7 @@ impl From<String> for BizLocation {
     fn from(id: String) -> Self {
         BizLocation {
             id: BizLocationId::from(id),
+            extensions: serde_json::Map::new(),
         }
     }
 }
@@ -360,6 +370,9 @@ pub struct SensorElement {
     /// List of sensor reports
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sensor_report: Option<Vec<SensorReport>>,
+    /// Extra custom fields (namespace-qualified extensions)
+    #[serde(flatten)]
+    pub extensions: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Declaration of error correction context.
@@ -374,6 +387,9 @@ pub struct ErrorDeclaration {
     /// List of event IDs that correct this event
     #[serde(rename = "correctiveEventIDs", skip_serializing_if = "Option::is_none")]
     pub corrective_event_ids: Option<Vec<String>>,
+    /// Extra custom fields (namespace-qualified extensions)
+    #[serde(flatten)]
+    pub extensions: serde_json::Map<String, serde_json::Value>,
 }
 
 #[cfg(test)]

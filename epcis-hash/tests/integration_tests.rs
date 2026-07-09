@@ -134,6 +134,66 @@ fn test_sensor_document_roundtrip_preserves_all_fields() {
 }
 
 #[test]
+fn test_native_xml_parsing_is_semantically_faithful() {
+    use std::fs;
+    use std::path::Path;
+
+    // For every official EPCIS 2.0 XML document vector: parsing it into the
+    // typed EPCISDocument and canonicalizing the JSON serialization must
+    // yield exactly the same pre-hashes as canonicalizing the XML directly.
+    // Hash equality proves the typed parse lost or altered nothing that the
+    // EPCIS data model considers meaningful.
+    let dir_path = "../research-repos/epcis-python/tests/examples";
+    assert!(Path::new(dir_path).exists(), "examples directory not found");
+
+    let mut num_checked = 0;
+    for entry in fs::read_dir(dir_path).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().and_then(|s| s.to_str()) != Some("xml") {
+            continue;
+        }
+        let file_name = path.file_name().unwrap().to_str().unwrap().to_string();
+        let xml = fs::read_to_string(&path).unwrap();
+        // Query documents use a different envelope than EPCISDocument.
+        if xml.contains("EPCISQueryDocument") {
+            continue;
+        }
+
+        let doc = EPCISDocument::from_xml(&xml)
+            .unwrap_or_else(|e| panic!("from_xml failed for {file_name}: {e}"));
+        let json_val = serde_json::to_value(&doc).unwrap();
+
+        let from_typed = epcis_hash::canonicalize_json(&json_val, true)
+            .unwrap_or_else(|e| panic!("canonicalize_json failed for {file_name}: {e}"));
+        let from_xml_direct = epcis_hash::canonicalize_xml(&xml, true)
+            .unwrap_or_else(|e| panic!("canonicalize_xml failed for {file_name}: {e}"));
+        assert_eq!(
+            from_typed, from_xml_direct,
+            "typed-parse prehash diverges for {file_name}"
+        );
+
+        // And the same must hold after re-serializing the typed document
+        // back to XML.
+        let rewritten = doc
+            .to_xml()
+            .unwrap_or_else(|e| panic!("to_xml failed for {file_name}: {e}"));
+        let from_rewritten = epcis_hash::canonicalize_xml(&rewritten, true).unwrap_or_else(|e| {
+            panic!("canonicalize_xml of rewritten failed for {file_name}: {e}")
+        });
+        assert_eq!(
+            from_rewritten, from_xml_direct,
+            "re-serialized XML prehash diverges for {file_name}"
+        );
+
+        num_checked += 1;
+    }
+    assert!(
+        num_checked >= 10,
+        "expected at least 10 XML vectors, got {num_checked}"
+    );
+}
+
+#[test]
 fn test_typed_transformation_event_hash_matches_spec_json() {
     use epcis_models::TransformationEvent;
 

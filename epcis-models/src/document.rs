@@ -234,82 +234,43 @@ impl EPCISDocument {
         }
     }
 
-    /// Parses an `EPCISDocument` from XML produced by [`EPCISDocument::to_xml`].
+    /// Parses a standard EPCIS 2.0 XML document.
     ///
-    /// **Limitation:** this reads this SDK's own XML rendering of the JSON
-    /// document shape (e.g. `<type>ObjectEvent</type>` elements). It does
-    /// **not** parse standard EPCIS 2.0 XML documents, which use
-    /// `<EventList><ObjectEvent>...` element structure and XML namespaces.
-    /// To hash standard EPCIS XML, use `epcis_hash::canonicalize_xml`.
-    /// Native EPCIS 2.0 XML document parsing is planned as a follow-up.
+    /// Accepts the `<epcis:EPCISDocument>` element structure defined by the
+    /// EPCIS 2.0 XSD: event types as element names inside
+    /// `<EPCISBody><EventList>`, sensor data as XML attributes, `type`
+    /// attributes on business transactions / sources / destinations, and
+    /// foreign-namespace user extension elements (whose prefix declarations
+    /// are carried over into the document's JSON-LD `@context`).
     ///
-    /// # Errors
-    ///
-    /// Returns error if XML parsing fails.
-    pub fn from_xml(xml_str: &str) -> Result<Self, quick_xml::DeError> {
-        let raw_val: serde_json::Value = quick_xml::de::from_str(xml_str)?;
-        let clean_val = clean_json_value(raw_val);
-        serde_json::from_value(clean_val).map_err(|e| quick_xml::DeError::Custom(e.to_string()))
-    }
-
-    /// Serializes the `EPCISDocument` to an XML string.
-    ///
-    /// **Limitation:** the output is this SDK's own XML rendering of the JSON
-    /// document shape, suitable for round-tripping via
-    /// [`EPCISDocument::from_xml`]. It is **not** a standard EPCIS 2.0 XML
-    /// document and will not validate against the EPCIS XSD. Native EPCIS 2.0
-    /// XML serialization is planned as a follow-up.
+    /// **Limitation:** `EPCISHeader` master data in XML form is not yet
+    /// mapped; documents are parsed with `epcis_header` set to `None`.
     ///
     /// # Errors
     ///
-    /// Returns error if XML serialization fails.
-    pub fn to_xml(&self) -> Result<String, quick_xml::se::SeError> {
-        quick_xml::se::to_string_with_root("EPCISDocument", self)
+    /// Returns [`crate::EpcisModelError::InvalidXml`] if the document is not
+    /// well-formed EPCIS 2.0 XML.
+    pub fn from_xml(xml_str: &str) -> Result<Self, crate::EpcisModelError> {
+        let json_shape = crate::xml::epcis_xml_to_json(xml_str)?;
+        serde_json::from_value(json_shape)
+            .map_err(|e| crate::EpcisModelError::InvalidXml(e.to_string()))
     }
-}
 
-fn is_array_field(key: &str) -> bool {
-    matches!(
-        key,
-        "eventList"
-            | "epcList"
-            | "quantityList"
-            | "sensorElementList"
-            | "sensorReport"
-            | "sourceList"
-            | "destinationList"
-            | "bizTransactionList"
-    )
-}
-
-fn clean_json_value(v: serde_json::Value) -> serde_json::Value {
-    match v {
-        serde_json::Value::Object(mut map) => {
-            if map.len() == 1
-                && let Some(val) = map.remove("$text").or_else(|| map.remove("$value"))
-            {
-                return clean_json_value(val);
-            }
-            let cleaned = map
-                .into_iter()
-                .map(|(k, val)| {
-                    let cleaned_val = clean_json_value(val);
-                    if is_array_field(&k) {
-                        match cleaned_val {
-                            serde_json::Value::Array(_) => (k, cleaned_val),
-                            other => (k, serde_json::Value::Array(vec![other])),
-                        }
-                    } else {
-                        (k, cleaned_val)
-                    }
-                })
-                .collect();
-            serde_json::Value::Object(cleaned)
-        }
-        serde_json::Value::Array(arr) => {
-            serde_json::Value::Array(arr.into_iter().map(clean_json_value).collect())
-        }
-        other => other,
+    /// Serializes the document as standard EPCIS 2.0 XML.
+    ///
+    /// Event children are emitted in the order required by the EPCIS 2.0
+    /// XSD, and prefix mappings found in the JSON-LD `@context` are declared
+    /// as `xmlns:` attributes on the root element so extension elements stay
+    /// resolvable.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::EpcisModelError::InvalidXml`] if the document cannot
+    /// be represented (e.g. serialization of a field fails).
+    pub fn to_xml(&self) -> Result<String, crate::EpcisModelError> {
+        let json_shape = serde_json::to_value(self)
+            .map_err(|e| crate::EpcisModelError::InvalidXml(e.to_string()))?;
+        crate::xml::json_to_epcis_xml(&json_shape)
     }
 }
 
@@ -385,19 +346,66 @@ mod tests {
         let event = ObjectEvent::new(Utc::now(), "+00:00".to_string(), Action::Observe);
         let doc = EPCISDocument::new(vec![EPCISEvent::ObjectEvent(event)]);
 
-        // Serialize to XML
-        let xml_output = doc.to_xml();
-        assert!(xml_output.is_ok());
-        let xml_str = xml_output.unwrap();
-        assert!(xml_str.contains("<EPCISDocument"));
-        assert!(xml_str.contains("<epcisBody>"));
-        assert!(xml_str.contains("<type>ObjectEvent</type>"));
+        // Serialize to standard EPCIS 2.0 XML
+        let xml_str = doc.to_xml().unwrap();
+        assert!(xml_str.contains("<epcis:EPCISDocument"));
+        assert!(xml_str.contains("xmlns:epcis=\"urn:epcglobal:epcis:xsd:2\""));
+        assert!(xml_str.contains("<EPCISBody>"));
+        assert!(xml_str.contains("<ObjectEvent>"));
+        assert!(xml_str.contains("<action>OBSERVE</action>"));
 
         // Deserialize back from XML
-        let deserialized = EPCISDocument::from_xml(&xml_str);
-        assert!(deserialized.is_ok());
-        let parsed_doc = deserialized.unwrap();
+        let parsed_doc = EPCISDocument::from_xml(&xml_str).unwrap();
         assert_eq!(parsed_doc.schema_version, "2.0");
         assert_eq!(parsed_doc.r#type, "EPCISDocument");
+        assert_eq!(parsed_doc.epcis_body.event_list.len(), 1);
+        assert!(matches!(
+            parsed_doc.epcis_body.event_list[0],
+            EPCISEvent::ObjectEvent(_)
+        ));
+    }
+
+    #[test]
+    fn test_from_xml_standard_document() {
+        let xml = r#"<?xml version="1.0"?>
+<epcis:EPCISDocument xmlns:epcis="urn:epcglobal:epcis:xsd:2" xmlns:example="https://ns.example.com/epcis/" schemaVersion="2.0" creationDate="2019-10-21T14:59:02.099+02:00">
+  <EPCISBody>
+    <EventList>
+      <ObjectEvent>
+        <eventTime>2019-10-21T11:00:30.000+01:00</eventTime>
+        <eventTimeZoneOffset>+01:00</eventTimeZoneOffset>
+        <epcList><epc>urn:epc:id:sscc:5200001.0111111146</epc></epcList>
+        <action>OBSERVE</action>
+        <bizStep>urn:epcglobal:cbv:bizstep:departing</bizStep>
+        <readPoint><id>urn:epc:id:sgln:5200001.99901.0</id></readPoint>
+        <bizTransactionList>
+          <bizTransaction type="urn:epcglobal:cbv:btt:desadv">urn:epcglobal:cbv:bt:5200001000008:4711</bizTransaction>
+        </bizTransactionList>
+        <example:myField>custom</example:myField>
+      </ObjectEvent>
+    </EventList>
+  </EPCISBody>
+</epcis:EPCISDocument>"#;
+        let doc = EPCISDocument::from_xml(xml).unwrap();
+        assert_eq!(doc.epcis_body.event_list.len(), 1);
+        let EPCISEvent::ObjectEvent(event) = &doc.epcis_body.event_list[0] else {
+            panic!("expected ObjectEvent");
+        };
+        assert_eq!(event.action, Action::Observe);
+        assert_eq!(event.epc_list.as_ref().unwrap().len(), 1);
+        assert_eq!(
+            event.biz_transaction_list.as_ref().unwrap()[0].r#type,
+            "urn:epcglobal:cbv:btt:desadv"
+        );
+        assert_eq!(
+            event.extensions.get("example:myField").unwrap(),
+            &serde_json::json!("custom")
+        );
+        // Prefix declaration carried into the JSON-LD context
+        assert!(
+            serde_json::to_string(&doc.context)
+                .unwrap()
+                .contains("https://ns.example.com/epcis/")
+        );
     }
 }

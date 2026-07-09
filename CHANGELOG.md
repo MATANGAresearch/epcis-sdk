@@ -62,14 +62,32 @@ or canonical hashes, hence the minor version bump.
   `Sgln::from_digital_link` accepts a plain `/414/GLN` without a qualifier,
   defaulting the extension to `"0"`.
 
+### Native EPCIS 2.0 XML support (epcis-models)
+
+- `EPCISDocument::from_xml` now parses **standard EPCIS 2.0 XML documents**
+  (`<epcis:EPCISDocument>` with `<EPCISBody><EventList>` structure, sensor
+  data as XML attributes, `type` attributes on business transactions, ilmd,
+  error declarations, and foreign-namespace extension elements whose prefix
+  declarations are carried into the JSON-LD `@context`). `to_xml` emits
+  standard EPCIS 2.0 XML with XSD-ordered event children. The previous
+  internal quick-xml round-trip format is gone. Verified against every
+  official XML test vector: parsing to typed models and re-serializing both
+  preserve the exact canonical pre-hash. Known limitation: `EPCISHeader`
+  master data in XML form is not yet mapped.
+- `ReadPoint`, `BizLocation`, `SensorElement`, and `ErrorDeclaration` gained
+  flattened `extensions` maps (the spec permits extension elements inside
+  all four), so such fields survive typed round-trips.
+
 ### Other
 
 - `epcis-cli --version` now reports the workspace version (was hardcoded
   `0.1.2`).
-- `EPCISDocument::from_xml`/`to_xml` are documented as an internal round-trip
-  format: they do not parse or produce standard EPCIS 2.0 XML documents.
-  Native EPCIS XML document support is planned. (`epcis_hash::canonicalize_xml`
-  continues to consume standard EPCIS XML for hashing.)
+- CI now clones the pinned reference-vector repository before testing (the
+  compliance suite previously could not run in CI), and gains wasm-build,
+  bench-compile, and MSRV (1.88) check steps.
+- Removed unused `url` and `uuid` dependencies from `epcis-models`.
+- Added `LICENSE-MIT` and `LICENSE-APACHE` texts; `rust-version` relaxed from
+  1.96.1 to 1.88 (verified by building with a 1.88 toolchain).
 - The compliance test now exercises every reference vector. The three vectors
   whose upstream `.prehashes` files are corrupted are verified via their
   `.hashes` files, which all match.

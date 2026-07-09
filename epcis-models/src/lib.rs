@@ -11,6 +11,7 @@ pub mod error;
 pub mod events;
 pub mod types;
 pub mod validation;
+mod xml;
 
 // Re-export common types at crate level for convenient usage
 pub use cbv::{BizStep, Disposition, StandardBizStep, StandardDisposition};
