@@ -598,6 +598,1022 @@ impl<'a> Giai<'a> {
     }
 }
 
+/// Party Global Location Number (PGLN).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pgln<'a> {
+    /// GS1 Company Prefix
+    pub company_prefix: &'a str,
+    /// Party reference
+    pub party_ref: &'a str,
+}
+
+impl<'a> Pgln<'a> {
+    /// Parses a PGLN from a URN format.
+    /// E.g. `urn:epc:id:pgln:CompanyPrefix.PartyRef`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if parsing fails.
+    pub fn from_urn(urn: &'a str) -> Result<Self, ParseError> {
+        let body = urn
+            .strip_prefix("urn:epc:id:pgln:")
+            .ok_or(ParseError::InvalidPrefix)?;
+        let mut parts = body.split('.');
+        let company_prefix = parts.next().ok_or(ParseError::MissingField)?;
+        let party_ref = parts.next().ok_or(ParseError::MissingField)?;
+        if parts.next().is_some() {
+            return Err(ParseError::ExtraFields);
+        }
+
+        // Party reference may be empty (12-digit company prefixes).
+        if !is_ascii_digits(company_prefix) || !party_ref.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix,
+            party_ref,
+        })
+    }
+
+    /// Converts the PGLN to its URN representation.
+    #[must_use]
+    pub fn to_urn(&self) -> String {
+        format!("urn:epc:id:pgln:{}.{}", self.company_prefix, self.party_ref)
+    }
+
+    /// Parses a PGLN from a GS1 Digital Link path structure.
+    /// E.g. `/417/GLN`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if format is invalid.
+    pub fn from_digital_link(url: &'a str, prefix_len: usize) -> Result<Self, ParseError> {
+        let idx = url.find("/417/").ok_or(ParseError::InvalidFormat)?;
+        let path = &url[idx + 5..];
+        let gln = path.split('/').next().ok_or(ParseError::MissingField)?;
+
+        if gln.len() != 13 || !is_ascii_digits(gln) {
+            return Err(ParseError::InvalidFormat);
+        }
+        if prefix_len >= 12 {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix: &gln[0..prefix_len],
+            party_ref: &gln[prefix_len..12],
+        })
+    }
+
+    /// Converts the PGLN to a Digital Link URL.
+    #[must_use]
+    pub fn to_digital_link(&self, base_url: &str) -> String {
+        let gln_without_check = format!("{}{}", self.company_prefix, self.party_ref);
+        let check_digit = calculate_check_digit(&gln_without_check);
+        format!(
+            "{}/417/{}{}",
+            base_url.trim_end_matches('/'),
+            gln_without_check,
+            check_digit
+        )
+    }
+}
+
+/// Global Document Type Identifier (GDTI).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Gdti<'a> {
+    /// GS1 Company Prefix
+    pub company_prefix: &'a str,
+    /// Document type reference
+    pub doc_type: &'a str,
+    /// Serial number
+    pub serial_number: &'a str,
+}
+
+impl<'a> Gdti<'a> {
+    /// Parses a GDTI from a URN format.
+    /// E.g. `urn:epc:id:gdti:CompanyPrefix.DocType.Serial`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if parsing fails.
+    pub fn from_urn(urn: &'a str) -> Result<Self, ParseError> {
+        let body = urn
+            .strip_prefix("urn:epc:id:gdti:")
+            .ok_or(ParseError::InvalidPrefix)?;
+        let mut parts = body.split('.');
+        let company_prefix = parts.next().ok_or(ParseError::MissingField)?;
+        let doc_type = parts.next().ok_or(ParseError::MissingField)?;
+        let serial_number = parts.next().ok_or(ParseError::MissingField)?;
+        if parts.next().is_some() {
+            return Err(ParseError::ExtraFields);
+        }
+
+        // Document type may be empty (12-digit company prefixes); the serial
+        // is free-form per GS1.
+        if !is_ascii_digits(company_prefix) || !doc_type.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix,
+            doc_type,
+            serial_number,
+        })
+    }
+
+    /// Converts the GDTI to its URN representation.
+    #[must_use]
+    pub fn to_urn(&self) -> String {
+        format!(
+            "urn:epc:id:gdti:{}.{}.{}",
+            self.company_prefix, self.doc_type, self.serial_number
+        )
+    }
+
+    /// Parses a GDTI from a GS1 Digital Link path structure.
+    /// E.g. `/253/GDTI` (13-digit GDTI followed directly by the serial)
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if format is invalid.
+    pub fn from_digital_link(url: &'a str, prefix_len: usize) -> Result<Self, ParseError> {
+        let idx = url.find("/253/").ok_or(ParseError::InvalidFormat)?;
+        let path = &url[idx + 5..];
+        let segment = path.split('/').next().ok_or(ParseError::MissingField)?;
+
+        let Some((gdti_id, serial_number)) = segment.split_at_checked(13) else {
+            return Err(ParseError::InvalidFormat);
+        };
+        if !is_ascii_digits(gdti_id) || prefix_len >= 12 {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix: &gdti_id[0..prefix_len],
+            doc_type: &gdti_id[prefix_len..12],
+            serial_number,
+        })
+    }
+
+    /// Converts the GDTI to a Digital Link URL.
+    #[must_use]
+    pub fn to_digital_link(&self, base_url: &str) -> String {
+        let gdti_without_check = format!("{}{}", self.company_prefix, self.doc_type);
+        let check_digit = calculate_check_digit(&gdti_without_check);
+        format!(
+            "{}/253/{}{}{}",
+            base_url.trim_end_matches('/'),
+            gdti_without_check,
+            check_digit,
+            self.serial_number
+        )
+    }
+}
+
+/// Global Service Relation Number — Recipient (GSRN).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Gsrn<'a> {
+    /// GS1 Company Prefix
+    pub company_prefix: &'a str,
+    /// Service reference
+    pub service_ref: &'a str,
+}
+
+impl<'a> Gsrn<'a> {
+    /// Parses a GSRN from a URN format.
+    /// E.g. `urn:epc:id:gsrn:CompanyPrefix.ServiceRef`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if parsing fails.
+    pub fn from_urn(urn: &'a str) -> Result<Self, ParseError> {
+        gsrn_like_from_urn(urn, "urn:epc:id:gsrn:").map(|(company_prefix, service_ref)| Self {
+            company_prefix,
+            service_ref,
+        })
+    }
+
+    /// Converts the GSRN to its URN representation.
+    #[must_use]
+    pub fn to_urn(&self) -> String {
+        format!(
+            "urn:epc:id:gsrn:{}.{}",
+            self.company_prefix, self.service_ref
+        )
+    }
+
+    /// Parses a GSRN from a GS1 Digital Link path structure.
+    /// E.g. `/8018/GSRN`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if format is invalid.
+    pub fn from_digital_link(url: &'a str, prefix_len: usize) -> Result<Self, ParseError> {
+        gsrn_like_from_digital_link(url, "/8018/", prefix_len).map(
+            |(company_prefix, service_ref)| Self {
+                company_prefix,
+                service_ref,
+            },
+        )
+    }
+
+    /// Converts the GSRN to a Digital Link URL.
+    #[must_use]
+    pub fn to_digital_link(&self, base_url: &str) -> String {
+        gsrn_like_to_digital_link(base_url, "8018", self.company_prefix, self.service_ref)
+    }
+}
+
+/// Global Service Relation Number — Provider (GSRNP).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Gsrnp<'a> {
+    /// GS1 Company Prefix
+    pub company_prefix: &'a str,
+    /// Service reference
+    pub service_ref: &'a str,
+}
+
+impl<'a> Gsrnp<'a> {
+    /// Parses a GSRNP from a URN format.
+    /// E.g. `urn:epc:id:gsrnp:CompanyPrefix.ServiceRef`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if parsing fails.
+    pub fn from_urn(urn: &'a str) -> Result<Self, ParseError> {
+        gsrn_like_from_urn(urn, "urn:epc:id:gsrnp:").map(|(company_prefix, service_ref)| Self {
+            company_prefix,
+            service_ref,
+        })
+    }
+
+    /// Converts the GSRNP to its URN representation.
+    #[must_use]
+    pub fn to_urn(&self) -> String {
+        format!(
+            "urn:epc:id:gsrnp:{}.{}",
+            self.company_prefix, self.service_ref
+        )
+    }
+
+    /// Parses a GSRNP from a GS1 Digital Link path structure.
+    /// E.g. `/8017/GSRNP`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if format is invalid.
+    pub fn from_digital_link(url: &'a str, prefix_len: usize) -> Result<Self, ParseError> {
+        gsrn_like_from_digital_link(url, "/8017/", prefix_len).map(
+            |(company_prefix, service_ref)| Self {
+                company_prefix,
+                service_ref,
+            },
+        )
+    }
+
+    /// Converts the GSRNP to a Digital Link URL.
+    #[must_use]
+    pub fn to_digital_link(&self, base_url: &str) -> String {
+        gsrn_like_to_digital_link(base_url, "8017", self.company_prefix, self.service_ref)
+    }
+}
+
+fn gsrn_like_from_urn<'a>(urn: &'a str, prefix: &str) -> Result<(&'a str, &'a str), ParseError> {
+    let body = urn.strip_prefix(prefix).ok_or(ParseError::InvalidPrefix)?;
+    let mut parts = body.split('.');
+    let company_prefix = parts.next().ok_or(ParseError::MissingField)?;
+    let service_ref = parts.next().ok_or(ParseError::MissingField)?;
+    if parts.next().is_some() {
+        return Err(ParseError::ExtraFields);
+    }
+    // Service reference may be empty (12-digit company prefixes).
+    if !is_ascii_digits(company_prefix) || !service_ref.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(ParseError::InvalidFormat);
+    }
+    Ok((company_prefix, service_ref))
+}
+
+fn gsrn_like_from_digital_link<'a>(
+    url: &'a str,
+    ai: &str,
+    prefix_len: usize,
+) -> Result<(&'a str, &'a str), ParseError> {
+    let idx = url.find(ai).ok_or(ParseError::InvalidFormat)?;
+    let path = &url[idx + ai.len()..];
+    let gsrn = path.split('/').next().ok_or(ParseError::MissingField)?;
+
+    if gsrn.len() != 18 || !is_ascii_digits(gsrn) {
+        return Err(ParseError::InvalidFormat);
+    }
+    if prefix_len >= 17 {
+        return Err(ParseError::InvalidFormat);
+    }
+    Ok((&gsrn[0..prefix_len], &gsrn[prefix_len..17]))
+}
+
+fn gsrn_like_to_digital_link(
+    base_url: &str,
+    ai: &str,
+    company_prefix: &str,
+    service_ref: &str,
+) -> String {
+    let without_check = format!("{company_prefix}{service_ref}");
+    let check_digit = calculate_check_digit(&without_check);
+    format!(
+        "{}/{ai}/{without_check}{check_digit}",
+        base_url.trim_end_matches('/')
+    )
+}
+
+/// Serialized Global Coupon Number (SGCN).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Sgcn<'a> {
+    /// GS1 Company Prefix
+    pub company_prefix: &'a str,
+    /// Coupon reference
+    pub coupon_ref: &'a str,
+    /// Serial component (numeric per GS1)
+    pub serial_number: &'a str,
+}
+
+impl<'a> Sgcn<'a> {
+    /// Parses an SGCN from a URN format.
+    /// E.g. `urn:epc:id:sgcn:CompanyPrefix.CouponRef.Serial`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if parsing fails.
+    pub fn from_urn(urn: &'a str) -> Result<Self, ParseError> {
+        let body = urn
+            .strip_prefix("urn:epc:id:sgcn:")
+            .ok_or(ParseError::InvalidPrefix)?;
+        let mut parts = body.split('.');
+        let company_prefix = parts.next().ok_or(ParseError::MissingField)?;
+        let coupon_ref = parts.next().ok_or(ParseError::MissingField)?;
+        let serial_number = parts.next().ok_or(ParseError::MissingField)?;
+        if parts.next().is_some() {
+            return Err(ParseError::ExtraFields);
+        }
+
+        // Coupon reference may be empty (12-digit company prefixes); the SGCN
+        // serial component is numeric per GS1.
+        if !is_ascii_digits(company_prefix)
+            || !coupon_ref.bytes().all(|b| b.is_ascii_digit())
+            || !is_ascii_digits(serial_number)
+        {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix,
+            coupon_ref,
+            serial_number,
+        })
+    }
+
+    /// Converts the SGCN to its URN representation.
+    #[must_use]
+    pub fn to_urn(&self) -> String {
+        format!(
+            "urn:epc:id:sgcn:{}.{}.{}",
+            self.company_prefix, self.coupon_ref, self.serial_number
+        )
+    }
+
+    /// Parses an SGCN from a GS1 Digital Link path structure.
+    /// E.g. `/255/GCN` (13-digit GCN followed directly by the serial)
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if format is invalid.
+    pub fn from_digital_link(url: &'a str, prefix_len: usize) -> Result<Self, ParseError> {
+        let idx = url.find("/255/").ok_or(ParseError::InvalidFormat)?;
+        let path = &url[idx + 5..];
+        let segment = path.split('/').next().ok_or(ParseError::MissingField)?;
+
+        let Some((gcn_id, serial_number)) = segment.split_at_checked(13) else {
+            return Err(ParseError::InvalidFormat);
+        };
+        if !is_ascii_digits(gcn_id) || !is_ascii_digits(serial_number) || prefix_len >= 12 {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix: &gcn_id[0..prefix_len],
+            coupon_ref: &gcn_id[prefix_len..12],
+            serial_number,
+        })
+    }
+
+    /// Converts the SGCN to a Digital Link URL.
+    #[must_use]
+    pub fn to_digital_link(&self, base_url: &str) -> String {
+        let gcn_without_check = format!("{}{}", self.company_prefix, self.coupon_ref);
+        let check_digit = calculate_check_digit(&gcn_without_check);
+        format!(
+            "{}/255/{}{}{}",
+            base_url.trim_end_matches('/'),
+            gcn_without_check,
+            check_digit,
+            self.serial_number
+        )
+    }
+}
+
+/// Global Identification Number for Consignment (GINC).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Ginc<'a> {
+    /// GS1 Company Prefix
+    pub company_prefix: &'a str,
+    /// Consignment reference (free-form per GS1)
+    pub consignment_ref: &'a str,
+}
+
+impl<'a> Ginc<'a> {
+    /// Parses a GINC from a URN format.
+    /// E.g. `urn:epc:id:ginc:CompanyPrefix.ConsignmentRef`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if parsing fails.
+    pub fn from_urn(urn: &'a str) -> Result<Self, ParseError> {
+        let body = urn
+            .strip_prefix("urn:epc:id:ginc:")
+            .ok_or(ParseError::InvalidPrefix)?;
+        let mut parts = body.split('.');
+        let company_prefix = parts.next().ok_or(ParseError::MissingField)?;
+        let consignment_ref = parts.next().ok_or(ParseError::MissingField)?;
+        if parts.next().is_some() {
+            return Err(ParseError::ExtraFields);
+        }
+
+        if !is_ascii_digits(company_prefix) || consignment_ref.is_empty() {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix,
+            consignment_ref,
+        })
+    }
+
+    /// Converts the GINC to its URN representation.
+    #[must_use]
+    pub fn to_urn(&self) -> String {
+        format!(
+            "urn:epc:id:ginc:{}.{}",
+            self.company_prefix, self.consignment_ref
+        )
+    }
+
+    /// Parses a GINC from a GS1 Digital Link path structure.
+    /// E.g. `/401/GINC` (no check digit; the company prefix length splits
+    /// the identifier)
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if format is invalid.
+    pub fn from_digital_link(url: &'a str, prefix_len: usize) -> Result<Self, ParseError> {
+        let idx = url.find("/401/").ok_or(ParseError::InvalidFormat)?;
+        let path = &url[idx + 5..];
+        let ginc = path.split('/').next().ok_or(ParseError::MissingField)?;
+
+        let Some((company_prefix, consignment_ref)) = ginc.split_at_checked(prefix_len) else {
+            return Err(ParseError::InvalidFormat);
+        };
+        if !is_ascii_digits(company_prefix) || consignment_ref.is_empty() {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix,
+            consignment_ref,
+        })
+    }
+
+    /// Converts the GINC to a Digital Link URL.
+    #[must_use]
+    pub fn to_digital_link(&self, base_url: &str) -> String {
+        format!(
+            "{}/401/{}{}",
+            base_url.trim_end_matches('/'),
+            self.company_prefix,
+            self.consignment_ref
+        )
+    }
+}
+
+/// Global Shipment Identification Number (GSIN).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Gsin<'a> {
+    /// GS1 Company Prefix
+    pub company_prefix: &'a str,
+    /// Shipper reference
+    pub shipper_ref: &'a str,
+}
+
+impl<'a> Gsin<'a> {
+    /// Parses a GSIN from a URN format.
+    /// E.g. `urn:epc:id:gsin:CompanyPrefix.ShipperRef`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if parsing fails.
+    pub fn from_urn(urn: &'a str) -> Result<Self, ParseError> {
+        let body = urn
+            .strip_prefix("urn:epc:id:gsin:")
+            .ok_or(ParseError::InvalidPrefix)?;
+        let mut parts = body.split('.');
+        let company_prefix = parts.next().ok_or(ParseError::MissingField)?;
+        let shipper_ref = parts.next().ok_or(ParseError::MissingField)?;
+        if parts.next().is_some() {
+            return Err(ParseError::ExtraFields);
+        }
+
+        // Shipper reference may be empty (12-digit company prefixes).
+        if !is_ascii_digits(company_prefix) || !shipper_ref.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix,
+            shipper_ref,
+        })
+    }
+
+    /// Converts the GSIN to its URN representation.
+    #[must_use]
+    pub fn to_urn(&self) -> String {
+        format!(
+            "urn:epc:id:gsin:{}.{}",
+            self.company_prefix, self.shipper_ref
+        )
+    }
+
+    /// Parses a GSIN from a GS1 Digital Link path structure.
+    /// E.g. `/402/GSIN`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if format is invalid.
+    pub fn from_digital_link(url: &'a str, prefix_len: usize) -> Result<Self, ParseError> {
+        let idx = url.find("/402/").ok_or(ParseError::InvalidFormat)?;
+        let path = &url[idx + 5..];
+        let gsin = path.split('/').next().ok_or(ParseError::MissingField)?;
+
+        if gsin.len() != 17 || !is_ascii_digits(gsin) {
+            return Err(ParseError::InvalidFormat);
+        }
+        if prefix_len >= 16 {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix: &gsin[0..prefix_len],
+            shipper_ref: &gsin[prefix_len..16],
+        })
+    }
+
+    /// Converts the GSIN to a Digital Link URL.
+    #[must_use]
+    pub fn to_digital_link(&self, base_url: &str) -> String {
+        let gsin_without_check = format!("{}{}", self.company_prefix, self.shipper_ref);
+        let check_digit = calculate_check_digit(&gsin_without_check);
+        format!(
+            "{}/402/{}{}",
+            base_url.trim_end_matches('/'),
+            gsin_without_check,
+            check_digit
+        )
+    }
+}
+
+/// Individual Trade Item Piece (ITIP).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Itip<'a> {
+    /// GS1 Company Prefix
+    pub company_prefix: &'a str,
+    /// Indicator digit
+    pub indicator: &'a str,
+    /// Item reference
+    pub item_ref: &'a str,
+    /// Piece number (2 digits)
+    pub piece: &'a str,
+    /// Total number of pieces (2 digits)
+    pub total: &'a str,
+    /// Serial number
+    pub serial_number: &'a str,
+}
+
+impl<'a> Itip<'a> {
+    /// Parses an ITIP from a URN format.
+    /// E.g. `urn:epc:id:itip:CompanyPrefix.IndicatorAndItemRef.Piece.Total.Serial`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if parsing fails.
+    pub fn from_urn(urn: &'a str) -> Result<Self, ParseError> {
+        let body = urn
+            .strip_prefix("urn:epc:id:itip:")
+            .ok_or(ParseError::InvalidPrefix)?;
+        let mut parts = body.split('.');
+        let company_prefix = parts.next().ok_or(ParseError::MissingField)?;
+        let indicator_and_item_ref = parts.next().ok_or(ParseError::MissingField)?;
+        let piece = parts.next().ok_or(ParseError::MissingField)?;
+        let total = parts.next().ok_or(ParseError::MissingField)?;
+        let serial_number = parts.next().ok_or(ParseError::MissingField)?;
+        if parts.next().is_some() {
+            return Err(ParseError::ExtraFields);
+        }
+
+        if !is_ascii_digits(company_prefix)
+            || !is_ascii_digits(indicator_and_item_ref)
+            || piece.len() != 2
+            || !is_ascii_digits(piece)
+            || total.len() != 2
+            || !is_ascii_digits(total)
+        {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix,
+            indicator: &indicator_and_item_ref[0..1],
+            item_ref: &indicator_and_item_ref[1..],
+            piece,
+            total,
+            serial_number,
+        })
+    }
+
+    /// Converts the ITIP to its URN representation.
+    #[must_use]
+    pub fn to_urn(&self) -> String {
+        format!(
+            "urn:epc:id:itip:{}.{}{}.{}.{}.{}",
+            self.company_prefix,
+            self.indicator,
+            self.item_ref,
+            self.piece,
+            self.total,
+            self.serial_number
+        )
+    }
+
+    /// Parses an ITIP from a GS1 Digital Link path structure.
+    /// E.g. `/8006/ITIP/21/SERIAL` (14-digit GTIN + 2-digit piece + 2-digit total)
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if format is invalid.
+    pub fn from_digital_link(url: &'a str, prefix_len: usize) -> Result<Self, ParseError> {
+        let idx = url.find("/8006/").ok_or(ParseError::InvalidFormat)?;
+        let path = &url[idx + 6..];
+        let mut parts = path.split('/');
+        let itip = parts.next().ok_or(ParseError::MissingField)?;
+        let ai = parts.next().ok_or(ParseError::MissingField)?;
+        if ai != "21" {
+            return Err(ParseError::InvalidFormat);
+        }
+        let serial_number = parts.next().ok_or(ParseError::MissingField)?;
+
+        if itip.len() != 18 || !is_ascii_digits(itip) {
+            return Err(ParseError::InvalidFormat);
+        }
+        if prefix_len >= 13 {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            indicator: &itip[0..1],
+            company_prefix: &itip[1..=prefix_len],
+            item_ref: &itip[1 + prefix_len..13],
+            piece: &itip[14..16],
+            total: &itip[16..18],
+            serial_number,
+        })
+    }
+
+    /// Converts the ITIP to a Digital Link URL.
+    #[must_use]
+    pub fn to_digital_link(&self, base_url: &str) -> String {
+        let gtin_without_check =
+            format!("{}{}{}", self.indicator, self.company_prefix, self.item_ref);
+        let check_digit = calculate_check_digit(&gtin_without_check);
+        format!(
+            "{}/8006/{}{}{}{}/21/{}",
+            base_url.trim_end_matches('/'),
+            gtin_without_check,
+            check_digit,
+            self.piece,
+            self.total,
+            self.serial_number
+        )
+    }
+}
+
+/// Unit Pack Identifier (UPUI).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Upui<'a> {
+    /// GS1 Company Prefix
+    pub company_prefix: &'a str,
+    /// Indicator digit
+    pub indicator: &'a str,
+    /// Item reference
+    pub item_ref: &'a str,
+    /// Third-party unit pack serial
+    pub serial_number: &'a str,
+}
+
+impl<'a> Upui<'a> {
+    /// Parses a UPUI from a URN format.
+    /// E.g. `urn:epc:id:upui:CompanyPrefix.IndicatorAndItemRef.Serial`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if parsing fails.
+    pub fn from_urn(urn: &'a str) -> Result<Self, ParseError> {
+        let body = urn
+            .strip_prefix("urn:epc:id:upui:")
+            .ok_or(ParseError::InvalidPrefix)?;
+        let mut parts = body.split('.');
+        let company_prefix = parts.next().ok_or(ParseError::MissingField)?;
+        let indicator_and_item_ref = parts.next().ok_or(ParseError::MissingField)?;
+        let serial_number = parts.next().ok_or(ParseError::MissingField)?;
+        if parts.next().is_some() {
+            return Err(ParseError::ExtraFields);
+        }
+
+        if !is_ascii_digits(company_prefix) || !is_ascii_digits(indicator_and_item_ref) {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix,
+            indicator: &indicator_and_item_ref[0..1],
+            item_ref: &indicator_and_item_ref[1..],
+            serial_number,
+        })
+    }
+
+    /// Converts the UPUI to its URN representation.
+    #[must_use]
+    pub fn to_urn(&self) -> String {
+        format!(
+            "urn:epc:id:upui:{}.{}{}.{}",
+            self.company_prefix, self.indicator, self.item_ref, self.serial_number
+        )
+    }
+
+    /// Parses a UPUI from a GS1 Digital Link path structure.
+    /// E.g. `/01/GTIN/235/SERIAL`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if format is invalid.
+    pub fn from_digital_link(url: &'a str, prefix_len: usize) -> Result<Self, ParseError> {
+        let (gtin, serial_number) = gtin_with_qualifier(url, "235")?;
+        if prefix_len >= 13 {
+            return Err(ParseError::InvalidFormat);
+        }
+        Ok(Self {
+            indicator: &gtin[0..1],
+            company_prefix: &gtin[1..=prefix_len],
+            item_ref: &gtin[1 + prefix_len..13],
+            serial_number,
+        })
+    }
+
+    /// Converts the UPUI to a Digital Link URL.
+    #[must_use]
+    pub fn to_digital_link(&self, base_url: &str) -> String {
+        let gtin_without_check =
+            format!("{}{}{}", self.indicator, self.company_prefix, self.item_ref);
+        let check_digit = calculate_check_digit(&gtin_without_check);
+        format!(
+            "{}/01/{}{}/235/{}",
+            base_url.trim_end_matches('/'),
+            gtin_without_check,
+            check_digit,
+            self.serial_number
+        )
+    }
+}
+
+/// Component / Part Identifier (CPI).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cpi<'a> {
+    /// GS1 Company Prefix
+    pub company_prefix: &'a str,
+    /// Component/part reference
+    pub part_ref: &'a str,
+    /// Serial component (numeric per GS1)
+    pub serial_number: &'a str,
+}
+
+impl<'a> Cpi<'a> {
+    /// Parses a CPI from a URN format.
+    /// E.g. `urn:epc:id:cpi:CompanyPrefix.PartRef.Serial`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if parsing fails.
+    pub fn from_urn(urn: &'a str) -> Result<Self, ParseError> {
+        let body = urn
+            .strip_prefix("urn:epc:id:cpi:")
+            .ok_or(ParseError::InvalidPrefix)?;
+        let mut parts = body.split('.');
+        let company_prefix = parts.next().ok_or(ParseError::MissingField)?;
+        let part_ref = parts.next().ok_or(ParseError::MissingField)?;
+        let serial_number = parts.next().ok_or(ParseError::MissingField)?;
+        if parts.next().is_some() {
+            return Err(ParseError::ExtraFields);
+        }
+
+        // The part reference is upper-alphanumeric per GS1; the CPI serial
+        // component is numeric.
+        if !is_ascii_digits(company_prefix)
+            || part_ref.is_empty()
+            || !is_ascii_digits(serial_number)
+        {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix,
+            part_ref,
+            serial_number,
+        })
+    }
+
+    /// Converts the CPI to its URN representation.
+    #[must_use]
+    pub fn to_urn(&self) -> String {
+        format!(
+            "urn:epc:id:cpi:{}.{}.{}",
+            self.company_prefix, self.part_ref, self.serial_number
+        )
+    }
+
+    /// Parses a CPI from a GS1 Digital Link path structure.
+    /// E.g. `/8010/CPID/8011/SERIAL`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if format is invalid.
+    pub fn from_digital_link(url: &'a str, prefix_len: usize) -> Result<Self, ParseError> {
+        let idx = url.find("/8010/").ok_or(ParseError::InvalidFormat)?;
+        let path = &url[idx + 6..];
+        let mut parts = path.split('/');
+        let cpid = parts.next().ok_or(ParseError::MissingField)?;
+        let ai = parts.next().ok_or(ParseError::MissingField)?;
+        if ai != "8011" {
+            return Err(ParseError::InvalidFormat);
+        }
+        let serial_number = parts.next().ok_or(ParseError::MissingField)?;
+
+        let Some((company_prefix, part_ref)) = cpid.split_at_checked(prefix_len) else {
+            return Err(ParseError::InvalidFormat);
+        };
+        if !is_ascii_digits(company_prefix)
+            || part_ref.is_empty()
+            || !is_ascii_digits(serial_number)
+        {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix,
+            part_ref,
+            serial_number,
+        })
+    }
+
+    /// Converts the CPI to a Digital Link URL.
+    #[must_use]
+    pub fn to_digital_link(&self, base_url: &str) -> String {
+        format!(
+            "{}/8010/{}{}/8011/{}",
+            base_url.trim_end_matches('/'),
+            self.company_prefix,
+            self.part_ref,
+            self.serial_number
+        )
+    }
+}
+
+/// Lot-level GTIN (LGTIN) — class-level identification of a batch/lot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Lgtin<'a> {
+    /// GS1 Company Prefix
+    pub company_prefix: &'a str,
+    /// Indicator digit
+    pub indicator: &'a str,
+    /// Item reference
+    pub item_ref: &'a str,
+    /// Lot / batch number
+    pub lot: &'a str,
+}
+
+impl<'a> Lgtin<'a> {
+    /// Parses an LGTIN from a URN format.
+    /// E.g. `urn:epc:class:lgtin:CompanyPrefix.IndicatorAndItemRef.Lot`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if parsing fails.
+    pub fn from_urn(urn: &'a str) -> Result<Self, ParseError> {
+        let body = urn
+            .strip_prefix("urn:epc:class:lgtin:")
+            .ok_or(ParseError::InvalidPrefix)?;
+        let mut parts = body.split('.');
+        let company_prefix = parts.next().ok_or(ParseError::MissingField)?;
+        let indicator_and_item_ref = parts.next().ok_or(ParseError::MissingField)?;
+        let lot = parts.next().ok_or(ParseError::MissingField)?;
+        if parts.next().is_some() {
+            return Err(ParseError::ExtraFields);
+        }
+
+        if !is_ascii_digits(company_prefix) || !is_ascii_digits(indicator_and_item_ref) {
+            return Err(ParseError::InvalidFormat);
+        }
+
+        Ok(Self {
+            company_prefix,
+            indicator: &indicator_and_item_ref[0..1],
+            item_ref: &indicator_and_item_ref[1..],
+            lot,
+        })
+    }
+
+    /// Converts the LGTIN to its URN representation.
+    #[must_use]
+    pub fn to_urn(&self) -> String {
+        format!(
+            "urn:epc:class:lgtin:{}.{}{}.{}",
+            self.company_prefix, self.indicator, self.item_ref, self.lot
+        )
+    }
+
+    /// Parses an LGTIN from a GS1 Digital Link path structure.
+    /// E.g. `/01/GTIN/10/LOT`
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if format is invalid.
+    pub fn from_digital_link(url: &'a str, prefix_len: usize) -> Result<Self, ParseError> {
+        let (gtin, lot) = gtin_with_qualifier(url, "10")?;
+        if prefix_len >= 13 {
+            return Err(ParseError::InvalidFormat);
+        }
+        Ok(Self {
+            indicator: &gtin[0..1],
+            company_prefix: &gtin[1..=prefix_len],
+            item_ref: &gtin[1 + prefix_len..13],
+            lot,
+        })
+    }
+
+    /// Converts the LGTIN to a Digital Link URL.
+    #[must_use]
+    pub fn to_digital_link(&self, base_url: &str) -> String {
+        let gtin_without_check =
+            format!("{}{}{}", self.indicator, self.company_prefix, self.item_ref);
+        let check_digit = calculate_check_digit(&gtin_without_check);
+        format!(
+            "{}/01/{}{}/10/{}",
+            base_url.trim_end_matches('/'),
+            gtin_without_check,
+            check_digit,
+            self.lot
+        )
+    }
+}
+
+/// Extracts a validated 14-digit GTIN and its qualifier value (e.g. `/10/`
+/// lot or `/235/` unit-pack serial) from a Digital Link path.
+fn gtin_with_qualifier<'a>(
+    url: &'a str,
+    qualifier: &str,
+) -> Result<(&'a str, &'a str), ParseError> {
+    let idx = url.find("/01/").ok_or(ParseError::InvalidFormat)?;
+    let path = &url[idx + 4..];
+    let mut parts = path.split('/');
+    let gtin = parts.next().ok_or(ParseError::MissingField)?;
+    let ai = parts.next().ok_or(ParseError::MissingField)?;
+    if ai != qualifier {
+        return Err(ParseError::InvalidFormat);
+    }
+    let value = parts.next().ok_or(ParseError::MissingField)?;
+
+    if gtin.len() != 14 || !is_ascii_digits(gtin) {
+        return Err(ParseError::InvalidFormat);
+    }
+    Ok((gtin, value))
+}
+
 /// Returns true if the string is non-empty and consists solely of ASCII digits.
 ///
 /// Numeric identifier segments must be validated with this before any byte
@@ -908,6 +1924,11 @@ use wasm_bindgen::prelude::*;
 /// Returns an error string if parsing or format validation fails.
 #[wasm_bindgen]
 pub fn translate_urn_to_dl_wasm(urn: &str, base_url: &str) -> Result<String, String> {
+    if urn.starts_with("urn:epc:class:lgtin:") {
+        return Lgtin::from_urn(urn)
+            .map(|k| k.to_digital_link(base_url))
+            .map_err(|e| format!("Failed to parse LGTIN: {e:?}"));
+    }
     let parts: Vec<&str> = urn.split(':').collect();
     if parts.len() < 5 {
         return Err("Invalid URN format. Expected e.g. urn:epc:id:sgtin:...".to_string());
@@ -935,6 +1956,36 @@ pub fn translate_urn_to_dl_wasm(urn: &str, base_url: &str) -> Result<String, Str
             let giai = Giai::from_urn(urn).map_err(|e| format!("Failed to parse GIAI: {:?}", e))?;
             Ok(giai.to_digital_link(base_url))
         }
+        "pgln" => Pgln::from_urn(urn)
+            .map(|k| k.to_digital_link(base_url))
+            .map_err(|e| format!("Failed to parse PGLN: {e:?}")),
+        "gdti" => Gdti::from_urn(urn)
+            .map(|k| k.to_digital_link(base_url))
+            .map_err(|e| format!("Failed to parse GDTI: {e:?}")),
+        "gsrn" => Gsrn::from_urn(urn)
+            .map(|k| k.to_digital_link(base_url))
+            .map_err(|e| format!("Failed to parse GSRN: {e:?}")),
+        "gsrnp" => Gsrnp::from_urn(urn)
+            .map(|k| k.to_digital_link(base_url))
+            .map_err(|e| format!("Failed to parse GSRNP: {e:?}")),
+        "sgcn" => Sgcn::from_urn(urn)
+            .map(|k| k.to_digital_link(base_url))
+            .map_err(|e| format!("Failed to parse SGCN: {e:?}")),
+        "ginc" => Ginc::from_urn(urn)
+            .map(|k| k.to_digital_link(base_url))
+            .map_err(|e| format!("Failed to parse GINC: {e:?}")),
+        "gsin" => Gsin::from_urn(urn)
+            .map(|k| k.to_digital_link(base_url))
+            .map_err(|e| format!("Failed to parse GSIN: {e:?}")),
+        "itip" => Itip::from_urn(urn)
+            .map(|k| k.to_digital_link(base_url))
+            .map_err(|e| format!("Failed to parse ITIP: {e:?}")),
+        "upui" => Upui::from_urn(urn)
+            .map(|k| k.to_digital_link(base_url))
+            .map_err(|e| format!("Failed to parse UPUI: {e:?}")),
+        "cpi" => Cpi::from_urn(urn)
+            .map(|k| k.to_digital_link(base_url))
+            .map_err(|e| format!("Failed to parse CPI: {e:?}")),
         other => Err(format!("Unsupported URN scheme: {}", other)),
     }
 }
@@ -946,6 +1997,52 @@ pub fn translate_urn_to_dl_wasm(urn: &str, base_url: &str) -> Result<String, Str
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn translate_dl_to_urn_wasm(dl: &str, prefix_len: usize) -> Result<String, String> {
+    if dl.contains("/01/") && dl.contains("/235/") {
+        return Upui::from_digital_link(dl, prefix_len)
+            .map(|k| k.to_urn())
+            .map_err(|e| format!("Failed to parse UPUI DL: {e:?}"));
+    }
+    if dl.contains("/01/") && dl.contains("/10/") {
+        return Lgtin::from_digital_link(dl, prefix_len)
+            .map(|k| k.to_urn())
+            .map_err(|e| format!("Failed to parse LGTIN DL: {e:?}"));
+    }
+    for (ai, translate) in [
+        (
+            "/8006/",
+            (|d, l| Itip::from_digital_link(d, l).map(|k| k.to_urn()))
+                as fn(&str, usize) -> Result<String, ParseError>,
+        ),
+        ("/8010/", |d, l| {
+            Cpi::from_digital_link(d, l).map(|k| k.to_urn())
+        }),
+        ("/8017/", |d, l| {
+            Gsrnp::from_digital_link(d, l).map(|k| k.to_urn())
+        }),
+        ("/8018/", |d, l| {
+            Gsrn::from_digital_link(d, l).map(|k| k.to_urn())
+        }),
+        ("/253/", |d, l| {
+            Gdti::from_digital_link(d, l).map(|k| k.to_urn())
+        }),
+        ("/255/", |d, l| {
+            Sgcn::from_digital_link(d, l).map(|k| k.to_urn())
+        }),
+        ("/401/", |d, l| {
+            Ginc::from_digital_link(d, l).map(|k| k.to_urn())
+        }),
+        ("/402/", |d, l| {
+            Gsin::from_digital_link(d, l).map(|k| k.to_urn())
+        }),
+        ("/417/", |d, l| {
+            Pgln::from_digital_link(d, l).map(|k| k.to_urn())
+        }),
+    ] {
+        if dl.contains(ai) {
+            return translate(dl, prefix_len)
+                .map_err(|e| format!("Failed to parse {ai} DL: {e:?}"));
+        }
+    }
     if dl.contains("/01/") {
         let sgtin = Sgtin::from_digital_link(dl, prefix_len)
             .map_err(|e| format!("Failed to parse SGTIN DL: {:?}", e))?;

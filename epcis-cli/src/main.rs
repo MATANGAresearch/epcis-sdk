@@ -1,6 +1,9 @@
 use clap::Parser;
 use epcis_hash::{canonicalize_json, canonicalize_xml, compute_hash_from_prehash};
-use epcis_translate::{Giai, Grai, Sgln, Sgtin, Sscc};
+use epcis_translate::{
+    Cpi, Gdti, Giai, Ginc, Grai, Gsin, Gsrn, Gsrnp, Itip, Lgtin, Pgln, Sgcn, Sgln, Sgtin, Sscc,
+    Upui,
+};
 use std::fs;
 use std::io::{self, Read};
 
@@ -41,6 +44,10 @@ struct Args {
 }
 
 fn handle_translation(key: &str, prefix_len: usize, base_url: &str) -> Result<String, String> {
+    if key.starts_with("urn:epc:class:lgtin:") {
+        let lgtin = Lgtin::from_urn(key).map_err(|e| format!("Failed to parse LGTIN: {:?}", e))?;
+        return Ok(lgtin.to_digital_link(base_url));
+    }
     if key.starts_with("urn:epc:id:") {
         // Translate from URN to Digital Link
         let parts: Vec<&str> = key.split(':').collect();
@@ -74,14 +81,108 @@ fn handle_translation(key: &str, prefix_len: usize, base_url: &str) -> Result<St
                     Giai::from_urn(key).map_err(|e| format!("Failed to parse GIAI: {:?}", e))?;
                 Ok(giai.to_digital_link(base_url))
             }
+            "pgln" => {
+                let pgln =
+                    Pgln::from_urn(key).map_err(|e| format!("Failed to parse PGLN: {:?}", e))?;
+                Ok(pgln.to_digital_link(base_url))
+            }
+            "gdti" => {
+                let gdti =
+                    Gdti::from_urn(key).map_err(|e| format!("Failed to parse GDTI: {:?}", e))?;
+                Ok(gdti.to_digital_link(base_url))
+            }
+            "gsrn" => {
+                let gsrn =
+                    Gsrn::from_urn(key).map_err(|e| format!("Failed to parse GSRN: {:?}", e))?;
+                Ok(gsrn.to_digital_link(base_url))
+            }
+            "gsrnp" => {
+                let gsrnp =
+                    Gsrnp::from_urn(key).map_err(|e| format!("Failed to parse GSRNP: {:?}", e))?;
+                Ok(gsrnp.to_digital_link(base_url))
+            }
+            "sgcn" => {
+                let sgcn =
+                    Sgcn::from_urn(key).map_err(|e| format!("Failed to parse SGCN: {:?}", e))?;
+                Ok(sgcn.to_digital_link(base_url))
+            }
+            "ginc" => {
+                let ginc =
+                    Ginc::from_urn(key).map_err(|e| format!("Failed to parse GINC: {:?}", e))?;
+                Ok(ginc.to_digital_link(base_url))
+            }
+            "gsin" => {
+                let gsin =
+                    Gsin::from_urn(key).map_err(|e| format!("Failed to parse GSIN: {:?}", e))?;
+                Ok(gsin.to_digital_link(base_url))
+            }
+            "itip" => {
+                let itip =
+                    Itip::from_urn(key).map_err(|e| format!("Failed to parse ITIP: {:?}", e))?;
+                Ok(itip.to_digital_link(base_url))
+            }
+            "upui" => {
+                let upui =
+                    Upui::from_urn(key).map_err(|e| format!("Failed to parse UPUI: {:?}", e))?;
+                Ok(upui.to_digital_link(base_url))
+            }
+            "cpi" => {
+                let cpi =
+                    Cpi::from_urn(key).map_err(|e| format!("Failed to parse CPI: {:?}", e))?;
+                Ok(cpi.to_digital_link(base_url))
+            }
             other => Err(format!("Unsupported URN scheme: {}", other)),
         }
     } else if key.starts_with("http") || key.contains('/') {
         // Translate from Digital Link to URN
-        if key.contains("/01/") {
+        if key.contains("/01/") && key.contains("/235/") {
+            let upui = Upui::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse UPUI DL: {:?}", e))?;
+            Ok(upui.to_urn())
+        } else if key.contains("/01/") && key.contains("/10/") {
+            let lgtin = Lgtin::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse LGTIN DL: {:?}", e))?;
+            Ok(lgtin.to_urn())
+        } else if key.contains("/01/") {
             let sgtin = Sgtin::from_digital_link(key, prefix_len)
                 .map_err(|e| format!("Failed to parse SGTIN DL: {:?}", e))?;
             Ok(sgtin.to_urn())
+        } else if key.contains("/8006/") {
+            let itip = Itip::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse ITIP DL: {:?}", e))?;
+            Ok(itip.to_urn())
+        } else if key.contains("/8010/") {
+            let cpi = Cpi::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse CPI DL: {:?}", e))?;
+            Ok(cpi.to_urn())
+        } else if key.contains("/8017/") {
+            let gsrnp = Gsrnp::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse GSRNP DL: {:?}", e))?;
+            Ok(gsrnp.to_urn())
+        } else if key.contains("/8018/") {
+            let gsrn = Gsrn::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse GSRN DL: {:?}", e))?;
+            Ok(gsrn.to_urn())
+        } else if key.contains("/253/") {
+            let gdti = Gdti::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse GDTI DL: {:?}", e))?;
+            Ok(gdti.to_urn())
+        } else if key.contains("/255/") {
+            let sgcn = Sgcn::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse SGCN DL: {:?}", e))?;
+            Ok(sgcn.to_urn())
+        } else if key.contains("/401/") {
+            let ginc = Ginc::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse GINC DL: {:?}", e))?;
+            Ok(ginc.to_urn())
+        } else if key.contains("/402/") {
+            let gsin = Gsin::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse GSIN DL: {:?}", e))?;
+            Ok(gsin.to_urn())
+        } else if key.contains("/417/") {
+            let pgln = Pgln::from_digital_link(key, prefix_len)
+                .map_err(|e| format!("Failed to parse PGLN DL: {:?}", e))?;
+            Ok(pgln.to_urn())
         } else if key.contains("/00/") {
             let sscc = Sscc::from_digital_link(key, prefix_len)
                 .map_err(|e| format!("Failed to parse SSCC DL: {:?}", e))?;
@@ -99,7 +200,7 @@ fn handle_translation(key: &str, prefix_len: usize, base_url: &str) -> Result<St
                 .map_err(|e| format!("Failed to parse GIAI DL: {:?}", e))?;
             Ok(giai.to_urn())
         } else {
-            Err("Could not detect GS1 Application Identifier (AI) in Digital Link path (expected e.g. /01/ SGTIN, /00/ SSCC, /414/ SGLN, /8003/ GRAI, /8004/ GIAI)".to_string())
+            Err("Could not detect GS1 Application Identifier (AI) in Digital Link path (e.g. /01/, /00/, /414/, /417/, /253/, /255/, /401/, /402/, /8003/, /8004/, /8006/, /8010/, /8017/, /8018/)".to_string())
         }
     } else {
         Err("Invalid key format. Key must be an EPC URN (starts with urn:epc:id:) or GS1 Digital Link URL/path".to_string())

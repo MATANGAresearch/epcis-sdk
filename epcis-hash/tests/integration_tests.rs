@@ -418,6 +418,69 @@ fn test_translators_giai() {
 }
 
 #[test]
+fn test_new_key_types_agree_with_hash_normaliser() {
+    use epcis_translate::{Cpi, Gdti, Ginc, Gsin, Gsrn, Gsrnp, Itip, Lgtin, Pgln, Sgcn, Upui};
+
+    // For every key type, the Digital Link produced by the typed translator
+    // must match epcis-hash's canonical normalisation of the same URN, and
+    // parsing the Digital Link back must reproduce the URN exactly.
+    let base = "https://id.gs1.org";
+
+    macro_rules! check {
+        ($ty:ident, $urn:expr, $prefix_len:expr) => {{
+            let parsed = $ty::from_urn($urn).unwrap();
+            let dl = parsed.to_digital_link(base);
+            assert_eq!(
+                dl,
+                epcis_hash::normalise_uri($urn),
+                "{} DL diverges from hash normaliser",
+                stringify!($ty)
+            );
+            let back = $ty::from_digital_link(&dl, $prefix_len).unwrap();
+            assert_eq!(back.to_urn(), $urn, "{} URN roundtrip", stringify!($ty));
+        }};
+    }
+
+    check!(Pgln, "urn:epc:id:pgln:4012345.00000", 7);
+    check!(Gdti, "urn:epc:id:gdti:4012345.11111.987", 7);
+    check!(Gsrn, "urn:epc:id:gsrn:4012345.0000098765", 7);
+    check!(Gsrnp, "urn:epc:id:gsrnp:4012345.0000098765", 7);
+    check!(Sgcn, "urn:epc:id:sgcn:4012345.99999.1234", 7);
+    check!(Ginc, "urn:epc:id:ginc:4012345.ABC123", 7);
+    check!(Gsin, "urn:epc:id:gsin:4012345.999987654", 7);
+    check!(Itip, "urn:epc:id:itip:4012345.012345.01.02.987", 7);
+    check!(Upui, "urn:epc:id:upui:4012345.012345.9876", 7);
+    check!(Cpi, "urn:epc:id:cpi:4012345.ABC123.9999", 7);
+    check!(Lgtin, "urn:epc:class:lgtin:4012345.012345.998877", 7);
+}
+
+#[test]
+fn test_new_key_types_reject_invalid_input() {
+    use epcis_translate::{Gdti, Gsrn, Itip, ParseError, Pgln, Upui};
+
+    assert_eq!(
+        Pgln::from_urn("urn:epc:id:pgln:40123x5.00000"),
+        Err(ParseError::InvalidFormat)
+    );
+    assert_eq!(
+        Gdti::from_urn("urn:epc:id:gdti:4012345.1é111.987"),
+        Err(ParseError::InvalidFormat)
+    );
+    assert_eq!(
+        Gsrn::from_digital_link("https://id.gs1.org/8018/40123450000098765", 7),
+        Err(ParseError::InvalidFormat) // 17 digits, needs 18
+    );
+    assert_eq!(
+        Itip::from_urn("urn:epc:id:itip:4012345.012345.1.02.987"),
+        Err(ParseError::InvalidFormat) // piece must be 2 digits
+    );
+    assert_eq!(
+        Upui::from_digital_link("https://id.gs1.org/01/04012345123456/21/9876", 7),
+        Err(ParseError::InvalidFormat) // /21/ is SGTIN, not UPUI
+    );
+}
+
+#[test]
 fn test_standard_vectors() {
     use std::fs;
     use std::path::Path;
