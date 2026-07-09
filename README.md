@@ -131,9 +131,9 @@ Add the crates to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-epcis-models = "0.1.2"
-epcis-hash = "0.1.2"
-epcis-translate = "0.1.2"
+epcis-models = "0.2.0"
+epcis-hash = "0.2.0"
+epcis-translate = "0.2.0"
 ```
 
 ### End-to-End Rust Example
