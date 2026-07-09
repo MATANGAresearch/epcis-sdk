@@ -1473,36 +1473,11 @@ fn find_events_in_tree(node: ContextNode, events: &mut Vec<ContextNode>) {
 ///
 /// Returns `EpcisHashError` if serialization to JSON or hashing fails.
 pub fn compute_canonical_hash(event: &EPCISEvent) -> Result<String, EpcisHashError> {
+    // Delegate to the same pipeline used for JSON documents so typed events
+    // and raw JSON always canonicalize identically.
     let val = serde_json::to_value(event)?;
-    let mut namespaces = BTreeMap::new();
-    namespaces.insert("gs1".to_string(), "https://gs1.org/voc/".to_string());
-    namespaces.insert("cbv".to_string(), "https://ref.gs1.org/cbv/".to_string());
-    namespaces.insert("cbvmda".to_string(), "urn:epcglobal:cbv:mda".to_string());
-
-    let mut event_node = json_to_context_node(None, &val, &namespaces)
-        .unwrap_or_else(|| ContextNode { name: None, value: None, children: vec![] });
-
-    let type_val = event_node.children.iter()
-        .find(|c| c.name.as_deref() == Some("type"))
-        .and_then(|c| c.value.clone())
-        .ok_or(EpcisHashError::MissingField { field: "type" })?;
-    event_node.name = None; // Reset to parent root
-
-    // Sort children
-    event_node.sort_children(None, true, &namespaces);
-
-    // Generate pre-hash
-    let mut prehash = format!("eventType={}\n", type_val);
-    prehash.push_str(&event_node.to_prehash_string(None, true, &namespaces));
-
-    let stripped = prehash.replace('\n', "").replace('\r', "");
-
-    let mut hasher = Sha256::new();
-    hasher.update(stripped.as_bytes());
-    let hash_result = hasher.finalize();
-    let hash_hex: String = hash_result.iter().map(|b| format!("{:02x}", b)).collect();
-
-    Ok(format!("ni:///sha-256;{}?ver=CBV2.0", hash_hex))
+    let prehash = canonicalize_json(&val, true)?;
+    Ok(compute_hash_from_prehash(&prehash))
 }
 
 /// Helper to generate pre-hash string from JSON Value.

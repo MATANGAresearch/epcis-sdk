@@ -316,6 +316,15 @@ fn test_standard_vectors() {
     let dir_path = "../research-repos/epcis-python/tests/examples";
     assert!(Path::new(dir_path).exists(), "Cloned examples directory not found!");
 
+    // The upstream .prehashes files for these vectors are corrupted (verified
+    // byte-level: one truncated mid-token, one with garbled interleaved text),
+    // so only their .hashes files are compared — which pass.
+    const CORRUPT_UPSTREAM_PREHASHES: [&str; 3] = [
+        "epcisDocWithAllGS1Keys.jsonld",
+        "epcisDocWithCustomSchemaInContext.jsonld",
+        "epcisDocWithDefaultSchemaInContext.jsonld",
+    ];
+
     let entries = fs::read_dir(dir_path).unwrap();
     let mut num_tested = 0;
 
@@ -326,14 +335,11 @@ fn test_standard_vectors() {
 
         if ext == "jsonld" || ext == "json" || ext == "xml" {
             let file_name = path.file_name().unwrap().to_str().unwrap();
-            if file_name == "epcisDocWithDefaultSchemaInContext.jsonld" {
-                continue;
-            }
             let file_content = fs::read_to_string(&path).unwrap();
 
             // 1. Verify prehashes if exists
             let prehashes_path = path.with_extension("prehashes");
-            if prehashes_path.exists() {
+            if prehashes_path.exists() && !CORRUPT_UPSTREAM_PREHASHES.contains(&file_name) {
                 let expected_prehashes = fs::read_to_string(&prehashes_path).unwrap().replace("\r", "");
                 let expected_lines: Vec<&str> = expected_prehashes.lines().filter(|s| !s.is_empty()).collect();
 
@@ -354,9 +360,6 @@ fn test_standard_vectors() {
                             file_name
                         );
                         for (i, (actual, expected)) in actual_lines.iter().zip(expected_lines.iter()).enumerate() {
-                            if file_name == "epcisDocWithAllGS1Keys.jsonld" || file_name == "epcisDocWithCustomSchemaInContext.jsonld" {
-                                continue;
-                            }
                             assert_eq!(
                                 actual,
                                 expected,
@@ -387,6 +390,12 @@ fn test_standard_vectors() {
 
                 if let Ok(prehash_str) = actual_prehashes_str {
                     let actual_lines: Vec<&str> = prehash_str.lines().filter(|s| !s.is_empty()).collect();
+                    assert_eq!(
+                        actual_lines.len(),
+                        expected_lines.len(),
+                        "Number of hashes mismatch for {}",
+                        file_name
+                    );
                     for (i, (actual_pre, expected)) in actual_lines.iter().zip(expected_lines.iter()).enumerate() {
                         let actual_hash = epcis_hash::compute_hash_from_prehash(actual_pre);
                         assert_eq!(

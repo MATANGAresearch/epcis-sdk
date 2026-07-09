@@ -7,7 +7,7 @@ use epcis_translate::{Sgtin, Sscc, Sgln, Grai, Giai};
 #[derive(Parser, Debug)]
 #[command(
     author = "Duma Mtungwa <duma@matangaresearch.com>",
-    version = "0.1.2",
+    version,
     about = "EPCIS SDK Command Line Interface",
     long_about = "A command line tool to generate canonical pre-hashes, final SHA-256 hashes, and translate GS1 identifiers between URN and Digital Link formats."
 )]
