@@ -194,6 +194,45 @@ fn test_native_xml_parsing_is_semantically_faithful() {
 }
 
 #[test]
+fn test_query_document_xml_parsing_is_semantically_faithful() {
+    use epcis_models::EPCISQueryDocument;
+    use std::fs;
+
+    // Same faithfulness bar as regular documents: typed parse and typed
+    // re-serialization must reproduce the exact canonical pre-hashes.
+    for file in [
+        "../research-repos/epcis-python/tests/examples/epcisQueryDocument.xml",
+        "../research-repos/epcis-python/tests/examples/epcisXmlQueryDocHavingEventWithIgnoreFields.xml",
+    ] {
+        let xml = fs::read_to_string(file).unwrap();
+        let doc = EPCISQueryDocument::from_xml(&xml)
+            .unwrap_or_else(|e| panic!("from_xml failed for {file}: {e}"));
+        assert!(
+            !doc.epcis_body
+                .query_results
+                .results_body
+                .event_list
+                .is_empty()
+        );
+
+        let json_val = serde_json::to_value(&doc).unwrap();
+        let from_typed = epcis_hash::canonicalize_json(&json_val, true).unwrap();
+        let from_xml_direct = epcis_hash::canonicalize_xml(&xml, true).unwrap();
+        assert_eq!(
+            from_typed, from_xml_direct,
+            "typed-parse diverges for {file}"
+        );
+
+        let rewritten = doc.to_xml().unwrap();
+        let from_rewritten = epcis_hash::canonicalize_xml(&rewritten, true).unwrap();
+        assert_eq!(
+            from_rewritten, from_xml_direct,
+            "re-serialized XML diverges for {file}"
+        );
+    }
+}
+
+#[test]
 fn test_typed_transformation_event_hash_matches_spec_json() {
     use epcis_models::TransformationEvent;
 

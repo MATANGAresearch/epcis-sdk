@@ -1794,6 +1794,28 @@ pub fn canonicalize_json(json_val: &Value, is_cbv_2_0: bool) -> Result<String, E
     Ok(prehashes.join("\n"))
 }
 
+/// Collects `ignoreFields` instruction elements from the document envelope.
+///
+/// They may sit at the document root or inside the envelope (e.g.
+/// `EPCISBody/QueryResults`); event lists are never descended into.
+fn collect_xml_ignore_fields(node: &ContextNode, out: &mut Vec<String>) {
+    for child in &node.children {
+        let child_name = strip_epcis_namespace(child.name.as_deref().unwrap_or(""));
+        if child_name == "EventList" {
+            continue;
+        }
+        if child_name.ends_with("ignoreFields") {
+            for sub_child in &child.children {
+                if let Some(ref sub_name) = sub_child.name {
+                    out.push(sub_name.clone());
+                }
+            }
+        } else {
+            collect_xml_ignore_fields(child, out);
+        }
+    }
+}
+
 /// Helper to generate pre-hash string from XML string.
 ///
 /// # Errors
@@ -1807,16 +1829,7 @@ pub fn canonicalize_xml(xml_str: &str, is_cbv_2_0: bool) -> Result<String, Epcis
 
     let root_node = xml_to_context_node(xml_str, &mut namespaces)?;
     let mut xml_ignore_fields = vec![];
-    for child in &root_node.children {
-        let child_name = strip_epcis_namespace(child.name.as_deref().unwrap_or(""));
-        if child_name.ends_with("ignoreFields") {
-            for sub_child in &child.children {
-                if let Some(ref sub_name) = sub_child.name {
-                    xml_ignore_fields.push(sub_name.clone());
-                }
-            }
-        }
-    }
+    collect_xml_ignore_fields(&root_node, &mut xml_ignore_fields);
     for field in xml_ignore_fields {
         namespaces.insert(format!("ignore:{field}"), "true".to_string());
     }

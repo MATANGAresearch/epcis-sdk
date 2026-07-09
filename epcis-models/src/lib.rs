@@ -16,8 +16,8 @@ mod xml;
 // Re-export common types at crate level for convenient usage
 pub use cbv::{BizStep, Disposition, StandardBizStep, StandardDisposition};
 pub use document::{
-    EPCISBody, EPCISDocument, EPCISHeader, EPCISMasterData, VocabularyAttribute, VocabularyElement,
-    VocabularyElementList,
+    EPCISBody, EPCISDocument, EPCISHeader, EPCISMasterData, EPCISQueryBody, EPCISQueryDocument,
+    QueryResults, ResultsBody, Vocabulary, VocabularyAttribute, VocabularyElement,
 };
 pub use error::EpcisModelError;
 pub use events::{

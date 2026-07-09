@@ -377,6 +377,97 @@ fn event_to_json(node: &XmlNode) -> Value {
     Value::Object(map)
 }
 
+/// Value of a master data `<attribute>`: plain text or structured content.
+fn attribute_content(node: &XmlNode) -> Value {
+    if node.children.is_empty() {
+        Value::String(node.text.clone())
+    } else {
+        let mut map = Map::new();
+        for sub in &node.children {
+            map.insert(sub.name.clone(), generic_value(sub));
+        }
+        Value::Object(map)
+    }
+}
+
+/// Maps `<EPCISHeader><EPCISMasterData>` content to the JSON header shape.
+/// Returns `None` when the header carries no master data (e.g. only an SBDH,
+/// which is not modelled).
+fn header_to_json(header: &XmlNode) -> Option<Value> {
+    let master = header.child("EPCISMasterData")?;
+    let vocab_list = master.child("VocabularyList")?;
+
+    let mut vocabularies = vec![];
+    for voc in &vocab_list.children {
+        if voc.local_name() != "Vocabulary" {
+            continue;
+        }
+        let vtype = voc
+            .attrs
+            .iter()
+            .find(|(k, _)| k == "type")
+            .map(|(_, v)| v.clone())
+            .unwrap_or_default();
+
+        let mut elements = vec![];
+        for vel in &voc.children {
+            if vel.local_name() != "VocabularyElementList" {
+                continue;
+            }
+            for elem in &vel.children {
+                if elem.local_name() != "VocabularyElement" {
+                    continue;
+                }
+                let id = elem
+                    .attrs
+                    .iter()
+                    .find(|(k, _)| k == "id")
+                    .map(|(_, v)| v.clone())
+                    .unwrap_or_default();
+                let mut attributes = vec![];
+                let mut child_ids = vec![];
+                for sub in &elem.children {
+                    match sub.local_name() {
+                        "attribute" => {
+                            let attr_id = sub
+                                .attrs
+                                .iter()
+                                .find(|(k, _)| k == "id")
+                                .map(|(_, v)| v.clone())
+                                .unwrap_or_default();
+                            attributes.push(json!({
+                                "id": attr_id,
+                                "attribute": attribute_content(sub),
+                            }));
+                        }
+                        "children" => {
+                            for id_node in &sub.children {
+                                child_ids.push(Value::String(id_node.text.clone()));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                let mut element = Map::new();
+                element.insert("id".to_string(), Value::String(id));
+                if !attributes.is_empty() {
+                    element.insert("attributes".to_string(), Value::Array(attributes));
+                }
+                if !child_ids.is_empty() {
+                    element.insert("children".to_string(), Value::Array(child_ids));
+                }
+                elements.push(Value::Object(element));
+            }
+        }
+        vocabularies.push(json!({
+            "type": vtype,
+            "vocabularyElementList": elements,
+        }));
+    }
+
+    Some(json!({"epcisMasterData": {"vocabularyList": vocabularies}}))
+}
+
 fn event_list_from_body(root: &XmlNode) -> Result<Vec<Value>, EpcisModelError> {
     let body = root
         .child("EPCISBody")
@@ -399,9 +490,46 @@ pub(crate) fn epcis_xml_to_json(xml: &str) -> Result<Value, EpcisModelError> {
     }
 
     let mut doc = Map::new();
+    insert_document_envelope(&mut doc, &root, &namespaces, "EPCISDocument")?;
+
+    // Hash-algorithm ignoreFields instructions live at the document root as a
+    // foreign-namespace element listing field names as empty child elements.
+    for child in &root.children {
+        if child.local_name() == "ignoreFields" {
+            let fields = child
+                .children
+                .iter()
+                .map(|f| Value::String(f.name.clone()))
+                .collect();
+            doc.insert(child.name.clone(), Value::Array(fields));
+        }
+    }
+
+    if let Some(header) = root.child("EPCISHeader")
+        && let Some(header_json) = header_to_json(header)
+    {
+        doc.insert("epcisHeader".to_string(), header_json);
+    }
+
+    doc.insert(
+        "epcisBody".to_string(),
+        json!({"eventList": Value::Array(event_list_from_body(&root)?)}),
+    );
+
+    Ok(Value::Object(doc))
+}
+
+/// Extracts `@context`, `schemaVersion`, and `creationDate` shared by both
+/// document kinds into `doc`.
+fn insert_document_envelope(
+    doc: &mut Map<String, Value>,
+    root: &XmlNode,
+    namespaces: &Namespaces,
+    doc_type: &str,
+) -> Result<(), EpcisModelError> {
     let mut context_map = Map::new();
-    for (prefix, uri) in &namespaces {
-        if prefix != "epcis" && prefix != "xsi" {
+    for (prefix, uri) in namespaces {
+        if prefix != "epcis" && prefix != "epcisq" && prefix != "xsi" && prefix != "sbdh" {
             context_map.insert(prefix.clone(), Value::String(uri.clone()));
         }
     }
@@ -412,10 +540,7 @@ pub(crate) fn epcis_xml_to_json(xml: &str) -> Result<Value, EpcisModelError> {
         context.push(Value::Object(context_map));
     }
     doc.insert("@context".to_string(), Value::Array(context));
-    doc.insert(
-        "type".to_string(),
-        Value::String("EPCISDocument".to_string()),
-    );
+    doc.insert("type".to_string(), Value::String(doc_type.to_string()));
 
     let mut schema_version = "2.0".to_string();
     let mut creation_date = None;
@@ -433,23 +558,72 @@ pub(crate) fn epcis_xml_to_json(xml: &str) -> Result<Value, EpcisModelError> {
             EpcisModelError::InvalidXml("missing creationDate attribute".to_string())
         })?),
     );
+    Ok(())
+}
 
-    // Hash-algorithm ignoreFields instructions live at the document root as a
-    // foreign-namespace element listing field names as empty child elements.
-    for child in &root.children {
-        if child.local_name() == "ignoreFields" {
-            let fields = child
-                .children
-                .iter()
-                .map(|f| Value::String(f.name.clone()))
-                .collect();
-            doc.insert(child.name.clone(), Value::Array(fields));
+/// Converts a standard EPCIS 2.0 query document (`EPCISQueryDocument`) into
+/// the JSON shape accepted by [`crate::EPCISQueryDocument`]'s serde
+/// implementation.
+pub(crate) fn epcis_query_xml_to_json(xml: &str) -> Result<Value, EpcisModelError> {
+    let (root, namespaces) = parse_tree(xml)?;
+    if root.local_name() != "EPCISQueryDocument" {
+        return Err(EpcisModelError::InvalidXml(format!(
+            "expected EPCISQueryDocument root, found {}",
+            root.name
+        )));
+    }
+
+    let mut doc = Map::new();
+    insert_document_envelope(&mut doc, &root, &namespaces, "EPCISQueryDocument")?;
+
+    // Standard documents wrap results in <EPCISBody><QueryResults>; some
+    // producers (including reference test vectors) place queryName /
+    // resultsBody directly under the root — accept both.
+    let query_results = root
+        .child("EPCISBody")
+        .and_then(|body| body.child("QueryResults"))
+        .unwrap_or(&root);
+
+    let mut results = Map::new();
+    for child in &query_results.children {
+        match child.local_name() {
+            "subscriptionID" => {
+                results.insert(
+                    "subscriptionID".to_string(),
+                    Value::String(child.text.clone()),
+                );
+            }
+            "queryName" => {
+                results.insert("queryName".to_string(), Value::String(child.text.clone()));
+            }
+            "resultsBody" => {
+                let event_list = child
+                    .child("EventList")
+                    .ok_or_else(|| EpcisModelError::InvalidXml("missing EventList".to_string()))?;
+                results.insert(
+                    "resultsBody".to_string(),
+                    json!({"eventList": Value::Array(
+                        event_list.children.iter().map(event_to_json).collect()
+                    )}),
+                );
+            }
+            "ignoreFields" => {
+                let fields = child
+                    .children
+                    .iter()
+                    .map(|f| Value::String(f.name.clone()))
+                    .collect();
+                results.insert(child.name.clone(), Value::Array(fields));
+            }
+            _ => {
+                results.insert(child.name.clone(), generic_value(child));
+            }
         }
     }
 
     doc.insert(
         "epcisBody".to_string(),
-        json!({"eventList": Value::Array(event_list_from_body(&root)?)}),
+        json!({"queryResults": Value::Object(results)}),
     );
 
     Ok(Value::Object(doc))
@@ -829,17 +1003,84 @@ fn write_event_field(w: &mut XmlWriter, key: &str, value: &Value) {
     }
 }
 
-/// Serializes the JSON document shape into standard EPCIS 2.0 XML.
-pub(crate) fn json_to_epcis_xml(doc: &Value) -> Result<String, EpcisModelError> {
-    let obj = doc
-        .as_object()
-        .ok_or_else(|| EpcisModelError::InvalidXml("document is not an object".to_string()))?;
+/// Writes `<EPCISHeader><EPCISMasterData>` from the JSON header shape.
+fn write_header(w: &mut XmlWriter, header: &Value) {
+    let Some(vocabularies) = header
+        .get("epcisMasterData")
+        .and_then(|m| m.get("vocabularyList"))
+        .and_then(|l| l.as_array())
+    else {
+        return;
+    };
+    w.open("EPCISHeader", &[]);
+    w.open("EPCISMasterData", &[]);
+    w.open("VocabularyList", &[]);
+    for voc in vocabularies {
+        let vtype = voc.get("type").map(scalar_to_text).unwrap_or_default();
+        w.open("Vocabulary", &[("type".to_string(), vtype)]);
+        w.open("VocabularyElementList", &[]);
+        for elem in voc
+            .get("vocabularyElementList")
+            .and_then(|l| l.as_array())
+            .into_iter()
+            .flatten()
+        {
+            let id = elem.get("id").map(scalar_to_text).unwrap_or_default();
+            w.open("VocabularyElement", &[("id".to_string(), id)]);
+            for attr in elem
+                .get("attributes")
+                .and_then(|a| a.as_array())
+                .into_iter()
+                .flatten()
+            {
+                let attr_id = attr.get("id").map(scalar_to_text).unwrap_or_default();
+                match attr.get("attribute") {
+                    Some(Value::Object(fields)) => {
+                        w.open("attribute", &[("id".to_string(), attr_id)]);
+                        for (k, v) in fields {
+                            write_generic(w, k, v);
+                        }
+                        w.close("attribute");
+                    }
+                    Some(other) => {
+                        w.indent();
+                        let _ = writeln!(
+                            w.out,
+                            "<attribute id=\"{}\">{}</attribute>",
+                            XmlWriter::escape(&attr_id),
+                            XmlWriter::escape(&scalar_to_text(other))
+                        );
+                    }
+                    None => {}
+                }
+            }
+            if let Some(children) = elem.get("children").and_then(|c| c.as_array()) {
+                w.open("children", &[]);
+                for child_id in children {
+                    w.leaf("id", &scalar_to_text(child_id));
+                }
+                w.close("children");
+            }
+            w.close("VocabularyElement");
+        }
+        w.close("VocabularyElementList");
+        w.close("Vocabulary");
+    }
+    w.close("VocabularyList");
+    w.close("EPCISMasterData");
+    w.close("EPCISHeader");
+}
 
+/// Serializes the JSON document shape into standard EPCIS 2.0 XML.
+/// Builds the root element attributes (namespace declaration, schema
+/// version, creation date, and `@context` prefix re-declarations).
+fn root_attributes(
+    obj: &Map<String, Value>,
+    ns_attr: &str,
+    ns_uri: &str,
+) -> Result<Vec<(String, String)>, EpcisModelError> {
     let mut root_attrs = vec![
-        (
-            "xmlns:epcis".to_string(),
-            "urn:epcglobal:epcis:xsd:2".to_string(),
-        ),
+        (ns_attr.to_string(), ns_uri.to_string()),
         (
             "schemaVersion".to_string(),
             obj.get("schemaVersion")
@@ -866,6 +1107,15 @@ pub(crate) fn json_to_epcis_xml(doc: &Value) -> Result<String, EpcisModelError> 
             }
         }
     }
+    Ok(root_attrs)
+}
+
+pub(crate) fn json_to_epcis_xml(doc: &Value) -> Result<String, EpcisModelError> {
+    let obj = doc
+        .as_object()
+        .ok_or_else(|| EpcisModelError::InvalidXml("document is not an object".to_string()))?;
+
+    let root_attrs = root_attributes(obj, "xmlns:epcis", "urn:epcglobal:epcis:xsd:2")?;
 
     let events = obj
         .get("epcisBody")
@@ -899,37 +1149,111 @@ pub(crate) fn json_to_epcis_xml(doc: &Value) -> Result<String, EpcisModelError> 
         }
     }
 
+    if let Some(header) = obj.get("epcisHeader") {
+        write_header(&mut w, header);
+    }
+
     w.open("EPCISBody", &[]);
     w.open("EventList", &[]);
 
     for event in events {
-        let Some(event_obj) = event.as_object() else {
-            continue;
-        };
-        let event_type = event_obj
-            .get("type")
-            .map(scalar_to_text)
-            .ok_or_else(|| EpcisModelError::InvalidXml("event missing type".to_string()))?;
-        w.open(&event_type, &[]);
-
-        let order = xsd_order(&event_type);
-        for &field in order {
-            if let Some(value) = event_obj.get(field) {
-                write_event_field(&mut w, field, value);
-            }
-        }
-        for (key, value) in event_obj {
-            if key == "type" || order.contains(&key.as_str()) {
-                continue;
-            }
-            write_event_field(&mut w, key, value);
-        }
-
-        w.close(&event_type);
+        write_event(&mut w, event)?;
     }
 
     w.close("EventList");
     w.close("EPCISBody");
     w.close("epcis:EPCISDocument");
+    Ok(w.out)
+}
+
+/// Writes one event (element name from `type`, children in XSD order).
+fn write_event(w: &mut XmlWriter, event: &Value) -> Result<(), EpcisModelError> {
+    let Some(event_obj) = event.as_object() else {
+        return Ok(());
+    };
+    let event_type = event_obj
+        .get("type")
+        .map(scalar_to_text)
+        .ok_or_else(|| EpcisModelError::InvalidXml("event missing type".to_string()))?;
+    w.open(&event_type, &[]);
+
+    let order = xsd_order(&event_type);
+    for &field in order {
+        if let Some(value) = event_obj.get(field) {
+            write_event_field(w, field, value);
+        }
+    }
+    for (key, value) in event_obj {
+        if key == "type" || order.contains(&key.as_str()) {
+            continue;
+        }
+        write_event_field(w, key, value);
+    }
+
+    w.close(&event_type);
+    Ok(())
+}
+
+/// Serializes the JSON query-document shape into standard EPCIS 2.0 query XML.
+pub(crate) fn json_to_epcis_query_xml(doc: &Value) -> Result<String, EpcisModelError> {
+    let obj = doc
+        .as_object()
+        .ok_or_else(|| EpcisModelError::InvalidXml("document is not an object".to_string()))?;
+
+    let root_attrs = root_attributes(obj, "xmlns:epcisq", "urn:epcglobal:epcis-query:xsd:2")?;
+
+    let results = obj
+        .get("epcisBody")
+        .and_then(|b| b.get("queryResults"))
+        .and_then(|r| r.as_object())
+        .ok_or_else(|| EpcisModelError::InvalidXml("missing epcisBody.queryResults".to_string()))?;
+
+    let mut w = XmlWriter {
+        out: String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"),
+        depth: 0,
+    };
+    w.open("epcisq:EPCISQueryDocument", &root_attrs);
+    w.open("EPCISBody", &[]);
+    w.open("QueryResults", &[]);
+
+    if let Some(subscription) = results.get("subscriptionID") {
+        w.leaf("subscriptionID", &scalar_to_text(subscription));
+    }
+    if let Some(name) = results.get("queryName") {
+        w.leaf("queryName", &scalar_to_text(name));
+    }
+    for (key, value) in results {
+        if key == "subscriptionID" || key == "queryName" || key == "resultsBody" {
+            continue;
+        }
+        if key.ends_with("ignoreFields") {
+            if let Some(names) = value.as_array() {
+                w.open(key, &[]);
+                for name in names {
+                    w.empty_with_attrs(&scalar_to_text(name), &[]);
+                }
+                w.close(key);
+            }
+        } else {
+            write_generic(&mut w, key, value);
+        }
+    }
+
+    let events = results
+        .get("resultsBody")
+        .and_then(|r| r.get("eventList"))
+        .and_then(|l| l.as_array())
+        .ok_or_else(|| EpcisModelError::InvalidXml("missing resultsBody.eventList".to_string()))?;
+    w.open("resultsBody", &[]);
+    w.open("EventList", &[]);
+    for event in events {
+        write_event(&mut w, event)?;
+    }
+    w.close("EventList");
+    w.close("resultsBody");
+
+    w.close("QueryResults");
+    w.close("EPCISBody");
+    w.close("epcisq:EPCISQueryDocument");
     Ok(w.out)
 }

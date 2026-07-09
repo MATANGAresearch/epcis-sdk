@@ -243,8 +243,9 @@ impl EPCISDocument {
     /// foreign-namespace user extension elements (whose prefix declarations
     /// are carried over into the document's JSON-LD `@context`).
     ///
-    /// **Limitation:** `EPCISHeader` master data in XML form is not yet
-    /// mapped; documents are parsed with `epcis_header` set to `None`.
+    /// `EPCISHeader` master data (`EPCISMasterData` vocabularies) is mapped
+    /// into the typed header. A Standard Business Document Header (SBDH)
+    /// inside `EPCISHeader`, if present, is not modelled and is skipped.
     ///
     /// # Errors
     ///
@@ -288,24 +289,24 @@ pub struct EPCISHeader {
 #[serde(rename_all = "camelCase")]
 pub struct EPCISMasterData {
     /// The master data vocabulary list
-    pub vocabulary_list: Vec<VocabularyElement>,
+    pub vocabulary_list: Vec<Vocabulary>,
 }
 
-/// Vocabularies mapping IDs to types and attributes.
+/// A master data vocabulary: a type plus its element list.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Vocabulary {
+    /// Type of the vocabulary (e.g. `urn:epcglobal:epcis:vtype:BusinessLocation`)
+    #[serde(rename = "type")]
+    pub r#type: String,
+    /// The vocabulary elements of this type
+    pub vocabulary_element_list: Vec<VocabularyElement>,
+}
+
+/// A single master data element: an identifier with attributes and children.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VocabularyElement {
-    /// Type of the vocabulary element
-    #[serde(rename = "type")]
-    pub r#type: String,
-    /// List of attributes and mappings
-    pub element_list: Vec<VocabularyElementList>,
-}
-
-/// A specific master data attribute / children list mapping.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VocabularyElementList {
     /// Identifier of the element
     pub id: String,
     /// Attributes linked to the identifier (optional)
@@ -322,8 +323,10 @@ pub struct VocabularyElementList {
 pub struct VocabularyAttribute {
     /// Attribute identifier
     pub id: String,
-    /// Attribute value
-    pub value: serde_json::Value,
+    /// Attribute value (string or structured content), serialized as
+    /// `attribute` per the EPCIS 2.0 JSON schema
+    #[serde(rename = "attribute")]
+    pub attribute: serde_json::Value,
 }
 
 /// Body container holding the array of EPCIS events.
@@ -331,6 +334,98 @@ pub struct VocabularyAttribute {
 #[serde(rename_all = "camelCase")]
 pub struct EPCISBody {
     /// List of events in the body
+    pub event_list: Vec<EPCISEvent>,
+}
+
+/// Represents a top-level EPCIS 2.0 query document (`EPCISQueryDocument`),
+/// the envelope returned by EPCIS query interfaces.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EPCISQueryDocument {
+    /// Context property containing schema mappings for JSON-LD compliance.
+    #[serde(rename = "@context")]
+    pub context: serde_json::Value,
+
+    /// Document identifier (optional).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+
+    /// Type identifier, always "`EPCISQueryDocument`".
+    #[serde(rename = "type")]
+    pub r#type: String,
+
+    /// Schema version, typically "2.0".
+    pub schema_version: String,
+
+    /// Creation timestamp of this document.
+    #[serde(with = "crate::document::datetime_serde")]
+    pub creation_date: DateTime<Utc>,
+
+    /// Body containing the query results.
+    pub epcis_body: EPCISQueryBody,
+
+    /// Extension elements.
+    #[serde(flatten)]
+    pub extensions: serde_json::Map<String, serde_json::Value>,
+}
+
+impl EPCISQueryDocument {
+    /// Parses a standard EPCIS 2.0 query document from XML
+    /// (`<epcisq:EPCISQueryDocument>` with
+    /// `<EPCISBody><QueryResults><resultsBody><EventList>` structure).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::EpcisModelError::InvalidXml`] if the document is not
+    /// well-formed EPCIS 2.0 query XML.
+    pub fn from_xml(xml_str: &str) -> Result<Self, crate::EpcisModelError> {
+        let json_shape = crate::xml::epcis_query_xml_to_json(xml_str)?;
+        serde_json::from_value(json_shape)
+            .map_err(|e| crate::EpcisModelError::InvalidXml(e.to_string()))
+    }
+
+    /// Serializes the query document as standard EPCIS 2.0 query XML.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::EpcisModelError::InvalidXml`] if the document cannot
+    /// be represented.
+    pub fn to_xml(&self) -> Result<String, crate::EpcisModelError> {
+        let json_shape = serde_json::to_value(self)
+            .map_err(|e| crate::EpcisModelError::InvalidXml(e.to_string()))?;
+        crate::xml::json_to_epcis_query_xml(&json_shape)
+    }
+}
+
+/// Body container of a query document.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EPCISQueryBody {
+    /// The results of the query
+    pub query_results: QueryResults,
+}
+
+/// Results envelope of an EPCIS query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResults {
+    /// Identifier of the standing-query subscription, if any
+    #[serde(rename = "subscriptionID", skip_serializing_if = "Option::is_none")]
+    pub subscription_id: Option<String>,
+    /// Name of the query that produced these results
+    pub query_name: String,
+    /// The result payload
+    pub results_body: ResultsBody,
+    /// Extra custom fields (e.g. repository ignore-field instructions)
+    #[serde(flatten)]
+    pub extensions: serde_json::Map<String, serde_json::Value>,
+}
+
+/// Result payload holding the matched events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResultsBody {
+    /// List of events returned by the query
     pub event_list: Vec<EPCISEvent>,
 }
 
@@ -363,6 +458,74 @@ mod tests {
             parsed_doc.epcis_body.event_list[0],
             EPCISEvent::ObjectEvent(_)
         ));
+    }
+
+    #[test]
+    fn test_xml_master_data_roundtrip() {
+        // Modeled on the EPCIS 2.0 standard's master data example.
+        let xml = r#"<?xml version="1.0"?>
+<epcis:EPCISDocument xmlns:epcis="urn:epcglobal:epcis:xsd:2" xmlns:cbvmda="urn:epcglobal:cbv:mda" schemaVersion="2.0" creationDate="2020-01-15T10:00:00.000+01:00">
+  <EPCISHeader>
+    <EPCISMasterData>
+      <VocabularyList>
+        <Vocabulary type="urn:epcglobal:epcis:vtype:BusinessLocation">
+          <VocabularyElementList>
+            <VocabularyElement id="urn:epc:id:sgln:0037000.00729.0">
+              <attribute id="cbvmda:site">0037000007296</attribute>
+              <attribute id="cbvmda:address">
+                <cbvmda:Street>100 Nowhere Street</cbvmda:Street>
+                <cbvmda:City>Fancy</cbvmda:City>
+              </attribute>
+              <children>
+                <id>urn:epc:id:sgln:0037000.00729.8201</id>
+                <id>urn:epc:id:sgln:0037000.00729.8202</id>
+              </children>
+            </VocabularyElement>
+          </VocabularyElementList>
+        </Vocabulary>
+      </VocabularyList>
+    </EPCISMasterData>
+  </EPCISHeader>
+  <EPCISBody>
+    <EventList>
+      <ObjectEvent>
+        <eventTime>2020-01-15T10:00:00.000+01:00</eventTime>
+        <eventTimeZoneOffset>+01:00</eventTimeZoneOffset>
+        <epcList><epc>urn:epc:id:sgtin:0037000.030241.1041970</epc></epcList>
+        <action>OBSERVE</action>
+      </ObjectEvent>
+    </EventList>
+  </EPCISBody>
+</epcis:EPCISDocument>"#;
+
+        let doc = EPCISDocument::from_xml(xml).unwrap();
+        let master = doc
+            .epcis_header
+            .as_ref()
+            .and_then(|h| h.epcis_master_data.as_ref())
+            .expect("master data parsed");
+        assert_eq!(master.vocabulary_list.len(), 1);
+        let vocab = &master.vocabulary_list[0];
+        assert_eq!(vocab.r#type, "urn:epcglobal:epcis:vtype:BusinessLocation");
+        let element = &vocab.vocabulary_element_list[0];
+        assert_eq!(element.id, "urn:epc:id:sgln:0037000.00729.0");
+        let attrs = element.attributes.as_ref().unwrap();
+        assert_eq!(attrs[0].id, "cbvmda:site");
+        assert_eq!(attrs[0].attribute, serde_json::json!("0037000007296"));
+        assert_eq!(
+            attrs[1].attribute["cbvmda:City"],
+            serde_json::json!("Fancy")
+        );
+        assert_eq!(element.children.as_ref().unwrap().len(), 2);
+
+        // Round-trip: re-serialized XML must parse to the same typed header.
+        let rewritten = doc.to_xml().unwrap();
+        let reparsed = EPCISDocument::from_xml(&rewritten).unwrap();
+        assert_eq!(
+            serde_json::to_value(reparsed.epcis_header).unwrap(),
+            serde_json::to_value(doc.epcis_header).unwrap()
+        );
+        assert_eq!(reparsed.epcis_body.event_list.len(), 1);
     }
 
     #[test]
