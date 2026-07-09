@@ -78,7 +78,7 @@ impl<'a> Sgtin<'a> {
             return Err(ParseError::ExtraFields);
         }
 
-        if indicator_and_item_ref.is_empty() {
+        if !is_ascii_digits(company_prefix) || !is_ascii_digits(indicator_and_item_ref) {
             return Err(ParseError::InvalidFormat);
         }
         let indicator = &indicator_and_item_ref[0..1];
@@ -118,7 +118,7 @@ impl<'a> Sgtin<'a> {
         }
         let serial_number = parts.next().ok_or(ParseError::MissingField)?;
 
-        if gtin.len() != 14 {
+        if gtin.len() != 14 || !is_ascii_digits(gtin) {
             return Err(ParseError::InvalidFormat);
         }
         if prefix_len >= 13 {
@@ -199,7 +199,7 @@ impl<'a> Sscc<'a> {
             return Err(ParseError::ExtraFields);
         }
 
-        if ext_and_serial.is_empty() {
+        if !is_ascii_digits(company_prefix) || !is_ascii_digits(ext_and_serial) {
             return Err(ParseError::InvalidFormat);
         }
         let extension_digit = &ext_and_serial[0..1];
@@ -233,7 +233,7 @@ impl<'a> Sscc<'a> {
         let mut parts = path.split('/');
         let sscc = parts.next().ok_or(ParseError::MissingField)?;
 
-        if sscc.len() != 18 {
+        if sscc.len() != 18 || !is_ascii_digits(sscc) {
             return Err(ParseError::InvalidFormat);
         }
         if prefix_len >= 17 {
@@ -310,6 +310,14 @@ impl<'a> Sgln<'a> {
             return Err(ParseError::ExtraFields);
         }
 
+        // Location reference may be empty (12-digit company prefixes) but must
+        // be numeric when present; the extension is free-form per GS1.
+        if !is_ascii_digits(company_prefix)
+            || !location_reference.bytes().all(|b| b.is_ascii_digit())
+        {
+            return Err(ParseError::InvalidFormat);
+        }
+
         Ok(Self {
             company_prefix,
             location_reference,
@@ -338,13 +346,15 @@ impl<'a> Sgln<'a> {
         let mut parts = path.split('/');
         let gln = parts.next().ok_or(ParseError::MissingField)?;
 
-        let next_ai = parts.next().ok_or(ParseError::MissingField)?;
-        if next_ai != "254" {
-            return Err(ParseError::InvalidFormat);
-        }
-        let extension = parts.next().ok_or(ParseError::MissingField)?;
+        // A plain GLN without a /254/ qualifier means "no extension" (GS1
+        // encodes that as extension "0"); any other qualifier is invalid.
+        let extension = match parts.next() {
+            None => "0",
+            Some("254") => parts.next().ok_or(ParseError::MissingField)?,
+            Some(_) => return Err(ParseError::InvalidFormat),
+        };
 
-        if gln.len() != 13 {
+        if gln.len() != 13 || !is_ascii_digits(gln) {
             return Err(ParseError::InvalidFormat);
         }
         if prefix_len >= 12 {
@@ -362,17 +372,30 @@ impl<'a> Sgln<'a> {
     }
 
     /// Converts the SGLN to a Digital Link URL.
+    ///
+    /// Extension `"0"` means "no extension" per GS1, so the `/254/` qualifier
+    /// is omitted in that case — matching the canonical form used by
+    /// `epcis-hash` when normalizing SGLN URNs.
     #[must_use]
     pub fn to_digital_link(&self, base_url: &str) -> String {
         let gln_without_check = format!("{}{}", self.company_prefix, self.location_reference);
         let check_digit = calculate_check_digit(&gln_without_check);
-        format!(
-            "{}/414/{}{}/254/{}",
-            base_url.trim_end_matches('/'),
-            gln_without_check,
-            check_digit,
-            self.extension
-        )
+        if self.extension == "0" {
+            format!(
+                "{}/414/{}{}",
+                base_url.trim_end_matches('/'),
+                gln_without_check,
+                check_digit
+            )
+        } else {
+            format!(
+                "{}/414/{}{}/254/{}",
+                base_url.trim_end_matches('/'),
+                gln_without_check,
+                check_digit,
+                self.extension
+            )
+        }
     }
 }
 
@@ -405,6 +428,12 @@ impl<'a> Grai<'a> {
             return Err(ParseError::ExtraFields);
         }
 
+        // Asset type may be empty (12-digit company prefixes) but must be
+        // numeric when present; the serial number is free-form per GS1.
+        if !is_ascii_digits(company_prefix) || !asset_type.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(ParseError::InvalidFormat);
+        }
+
         Ok(Self {
             company_prefix,
             asset_type,
@@ -433,11 +462,15 @@ impl<'a> Grai<'a> {
         
         // Find serial division if there is one (GRAI serials are appended to the 14-digit asset type)
         // GRAI-14 is always the first 14 digits, serial number follows it directly or after optional parameters
-        if path.len() < 14 {
+        // The 14-digit GRAI id must be numeric before slicing; the serial that
+        // follows is free-form per GS1.
+        let (grai_id, serial_number) = match path.split_at_checked(14) {
+            Some(parts) => parts,
+            None => return Err(ParseError::InvalidFormat),
+        };
+        if !is_ascii_digits(grai_id) {
             return Err(ParseError::InvalidFormat);
         }
-        let grai_id = &path[0..14];
-        let serial_number = &path[14..];
 
         if prefix_len >= 12 {
             return Err(ParseError::InvalidFormat);
@@ -495,6 +528,12 @@ impl<'a> Giai<'a> {
             return Err(ParseError::ExtraFields);
         }
 
+        // The asset reference is free-form per GS1; only the company prefix
+        // must be numeric.
+        if !is_ascii_digits(company_prefix) {
+            return Err(ParseError::InvalidFormat);
+        }
+
         Ok(Self {
             company_prefix,
             individual_asset_reference,
@@ -522,12 +561,16 @@ impl<'a> Giai<'a> {
         let mut parts = path.split('/');
         let raw_giai = parts.next().ok_or(ParseError::MissingField)?;
 
-        if raw_giai.len() <= prefix_len {
+        // The company prefix portion must be numeric before slicing; the
+        // remaining asset reference is free-form per GS1.
+        let (company_prefix, individual_asset_reference) =
+            match raw_giai.split_at_checked(prefix_len) {
+                Some(parts) => parts,
+                None => return Err(ParseError::InvalidFormat),
+            };
+        if !is_ascii_digits(company_prefix) || individual_asset_reference.is_empty() {
             return Err(ParseError::InvalidFormat);
         }
-
-        let company_prefix = &raw_giai[0..prefix_len];
-        let individual_asset_reference = &raw_giai[prefix_len..];
 
         Ok(Self {
             company_prefix,
@@ -545,6 +588,15 @@ impl<'a> Giai<'a> {
             self.individual_asset_reference
         )
     }
+}
+
+/// Returns true if the string is non-empty and consists solely of ASCII digits.
+///
+/// Numeric identifier segments must be validated with this before any byte
+/// slicing: it guarantees every byte is a char boundary and rejects garbage
+/// that would otherwise produce nonsense identifiers.
+fn is_ascii_digits(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit())
 }
 
 /// Helper to calculate the GS1 Luhn-like check digit.
@@ -638,6 +690,53 @@ mod tests {
         // Digital Link Errors
         assert_eq!(Giai::from_digital_link("https://id.gs1.org/8003/401234512345", 7), Err(ParseError::InvalidFormat));
         assert_eq!(Giai::from_digital_link("https://id.gs1.org/8004/401234512345", 15), Err(ParseError::InvalidFormat)); // prefix_len >= raw_giai.len()
+    }
+
+    #[test]
+    fn test_multibyte_input_returns_error_not_panic() {
+        // Multi-byte UTF-8 at slicing positions previously panicked
+        assert_eq!(Sgtin::from_urn("urn:epc:id:sgtin:4012345.é8765.1"), Err(ParseError::InvalidFormat));
+        assert_eq!(Sscc::from_urn("urn:epc:id:sscc:4012345.é123456789"), Err(ParseError::InvalidFormat));
+        assert_eq!(Sgln::from_urn("urn:epc:id:sgln:4012345.é0001.0"), Err(ParseError::InvalidFormat));
+        assert_eq!(Grai::from_urn("urn:epc:id:grai:4012345.é0001.1"), Err(ParseError::InvalidFormat));
+        assert_eq!(Giai::from_urn("urn:epc:id:giai:é012345.12345"), Err(ParseError::InvalidFormat));
+        assert_eq!(
+            Sgtin::from_digital_link("https://id.gs1.org/01/é4012345987652/21/1", 7),
+            Err(ParseError::InvalidFormat)
+        );
+        assert_eq!(
+            Grai::from_digital_link("https://id.gs1.org/8003/é401234500001612345", 7),
+            Err(ParseError::InvalidFormat)
+        );
+        assert_eq!(
+            Giai::from_digital_link("https://id.gs1.org/8004/é01234512345", 7),
+            Err(ParseError::InvalidFormat)
+        );
+    }
+
+    #[test]
+    fn test_non_numeric_segments_rejected() {
+        assert_eq!(Sgtin::from_urn("urn:epc:id:sgtin:abcdefg.hijkl.serial"), Err(ParseError::InvalidFormat));
+        assert_eq!(Sscc::from_urn("urn:epc:id:sscc:4012345.0123x5678"), Err(ParseError::InvalidFormat));
+        assert_eq!(Sgln::from_urn("urn:epc:id:sgln:40123a5.00001.0"), Err(ParseError::InvalidFormat));
+        assert_eq!(Grai::from_urn("urn:epc:id:grai:4012345.000x1.12345"), Err(ParseError::InvalidFormat));
+        assert_eq!(
+            Sgtin::from_digital_link("https://id.gs1.org/01/0401234598765X/21/12345", 7),
+            Err(ParseError::InvalidFormat)
+        );
+        // Free-form components stay permissive: serials, extensions, asset refs
+        assert!(Sgtin::from_urn("urn:epc:id:sgtin:4012345.098765.ABC-123").is_ok());
+        assert!(Giai::from_urn("urn:epc:id:giai:4012345.ASSET-9").is_ok());
+    }
+
+    #[test]
+    fn test_sgln_extension_zero_omits_qualifier() {
+        let sgln = Sgln::from_urn("urn:epc:id:sgln:4012345.00001.0").unwrap();
+        assert_eq!(sgln.to_digital_link("https://id.gs1.org"), "https://id.gs1.org/414/4012345000016");
+
+        let parsed = Sgln::from_digital_link("https://id.gs1.org/414/4012345000016", 7).unwrap();
+        assert_eq!(parsed.extension, "0");
+        assert_eq!(parsed.to_urn(), "urn:epc:id:sgln:4012345.00001.0");
     }
 
     #[test]

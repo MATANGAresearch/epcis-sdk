@@ -211,13 +211,24 @@ fn test_translators_sgln() {
     assert_eq!(sgln.extension, "0");
     assert_eq!(sgln.to_urn(), urn);
 
-    // 2. Digital Link roundtrip
+    // 2. Digital Link roundtrip — extension "0" canonically omits /254/
     let dl = "https://id.gs1.org/414/4012345000016/254/0";
     let sgln_dl = Sgln::from_digital_link(dl, 7).unwrap();
     assert_eq!(sgln_dl.company_prefix, "4012345");
     assert_eq!(sgln_dl.location_reference, "00001");
     assert_eq!(sgln_dl.extension, "0");
-    assert_eq!(sgln_dl.to_digital_link("https://id.gs1.org"), dl);
+    let canonical_dl = "https://id.gs1.org/414/4012345000016";
+    assert_eq!(sgln_dl.to_digital_link("https://id.gs1.org"), canonical_dl);
+
+    // A plain GLN without /254/ parses with extension "0"
+    let sgln_plain = Sgln::from_digital_link(canonical_dl, 7).unwrap();
+    assert_eq!(sgln_plain.extension, "0");
+    assert_eq!(sgln_plain.to_urn(), "urn:epc:id:sgln:4012345.00001.0");
+
+    // Non-"0" extensions keep the /254/ qualifier
+    let dl_ext = "https://id.gs1.org/414/4012345000016/254/987";
+    let sgln_ext = Sgln::from_digital_link(dl_ext, 7).unwrap();
+    assert_eq!(sgln_ext.to_digital_link("https://id.gs1.org"), dl_ext);
 }
 
 #[test]
