@@ -83,6 +83,85 @@ fn test_canonical_event_hashing() {
 }
 
 #[test]
+fn test_typed_transformation_event_hash_matches_spec_json() {
+    use epcis_models::TransformationEvent;
+
+    // The typed model must serialize `transformationID` (spec spelling) and
+    // therefore hash identically to the equivalent spec-compliant JSON event.
+    let mut event = TransformationEvent::new(
+        Utc.with_ymd_and_hms(2020, 3, 4, 11, 0, 30).unwrap(),
+        "+01:00".to_string(),
+    );
+    event.transformation_id = Some("urn:epc:id:gdti:0614141.12345.400".to_string());
+    let typed_hash = compute_canonical_hash(&EPCISEvent::TransformationEvent(event)).unwrap();
+
+    let spec_json = serde_json::json!({
+        "type": "TransformationEvent",
+        "eventTime": "2020-03-04T11:00:30.000Z",
+        "eventTimeZoneOffset": "+01:00",
+        "transformationID": "urn:epc:id:gdti:0614141.12345.400"
+    });
+    let prehash = epcis_hash::canonicalize_json(&spec_json, true).unwrap();
+    assert!(
+        prehash.contains("transformationID="),
+        "transformationID missing from spec prehash: {prehash}"
+    );
+    let spec_hash = epcis_hash::compute_hash_from_prehash(&prehash);
+
+    assert_eq!(typed_hash, spec_hash);
+}
+
+#[test]
+fn test_xml_default_namespace_hashes_like_prefixed() {
+    // The same event expressed three ways must produce the same pre-hash:
+    // (a) XML with a prefixed root namespace, (b) XML with a default xmlns
+    // covering every element, (c) JSON.
+    let prefixed_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<epcis:EPCISDocument xmlns:epcis="urn:epcglobal:epcis:xsd:2" schemaVersion="2.0" creationDate="2020-03-04T11:00:30.000+01:00">
+  <EPCISBody>
+    <EventList>
+      <ObjectEvent>
+        <eventTime>2020-03-04T11:00:30.000+01:00</eventTime>
+        <eventTimeZoneOffset>+01:00</eventTimeZoneOffset>
+        <epcList><epc>urn:epc:id:sgtin:0614141.107346.2023</epc></epcList>
+        <action>OBSERVE</action>
+        <bizTransactionList>
+          <bizTransaction type="urn:epcglobal:cbv:btt:po">http://transaction.acme.com/po/12345678</bizTransaction>
+        </bizTransactionList>
+      </ObjectEvent>
+    </EventList>
+  </EPCISBody>
+</epcis:EPCISDocument>"#;
+    let default_ns_xml = prefixed_xml
+        .replace(
+            "xmlns:epcis=\"urn:epcglobal:epcis:xsd:2\"",
+            "xmlns=\"urn:epcglobal:epcis:xsd:2\"",
+        )
+        .replace("epcis:EPCISDocument", "EPCISDocument");
+
+    let prefixed = epcis_hash::canonicalize_xml(prefixed_xml, true).unwrap();
+    let default_ns = epcis_hash::canonicalize_xml(&default_ns_xml, true).unwrap();
+    assert_eq!(prefixed, default_ns);
+    assert!(
+        !default_ns.contains('{'),
+        "EPCIS namespace leaked into prehash: {default_ns}"
+    );
+
+    let json_equiv = serde_json::json!({
+        "type": "ObjectEvent",
+        "eventTime": "2020-03-04T11:00:30.000+01:00",
+        "eventTimeZoneOffset": "+01:00",
+        "epcList": ["urn:epc:id:sgtin:0614141.107346.2023"],
+        "action": "OBSERVE",
+        "bizTransactionList": [
+            {"type": "urn:epcglobal:cbv:btt:po", "bizTransaction": "http://transaction.acme.com/po/12345678"}
+        ]
+    });
+    let json_prehash = epcis_hash::canonicalize_json(&json_equiv, true).unwrap();
+    assert_eq!(prefixed, json_prehash);
+}
+
+#[test]
 fn test_translators_sgtin() {
     // 1. URN roundtrip
     let urn = "urn:epc:id:sgtin:4012345.098765.12345";

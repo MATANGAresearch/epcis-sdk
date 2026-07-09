@@ -288,7 +288,7 @@ pub struct TransformationEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_quantity_list: Option<Vec<QuantityElement>>,
     /// Unique transformation logic identifier
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "transformationID", skip_serializing_if = "Option::is_none")]
     pub transformation_id: Option<String>,
     
     /// Business step

@@ -471,11 +471,22 @@ fn round_timestamp_to_millis(val: &str) -> String {
 
 
 fn normalize_numeric(val: &str) -> String {
+    // The reference implementation canonicalizes every numeric-looking value
+    // through a 64-bit float (`str(int(float(text)))` in Python), so integers
+    // above 2^53 intentionally lose precision here; matching that exactly is
+    // required for hash interoperability (see SensorDataExamples.xml vectors).
+    // Textual values that f64::from_str also accepts ("inf"/"nan") must pass
+    // through untouched, as they do in the reference.
+    if !val.bytes().all(|b| b.is_ascii_digit() || b == b'.' || b == b'-' || b == b'+' || b == b'e' || b == b'E')
+        || val.is_empty()
+    {
+        return val.to_string();
+    }
     if let Ok(num) = val.parse::<f64>() {
         if (num - num.trunc()).abs() < f64::EPSILON {
-            format!("{:.0}", num)
+            format!("{num:.0}")
         } else {
-            format!("{}", num)
+            format!("{num}")
         }
     } else {
         val.to_string()
@@ -708,7 +719,10 @@ impl ContextNode {
         let should_emit = self.name.is_some() && should_emit_parent_name(name_str, &self.children, is_cbv_2_0);
 
         if should_emit {
-            sb.push_str(name_str);
+            // Emit without the EPCIS XML namespace so default-xmlns documents
+            // (`{urn:epcglobal:epcis:xsd:2}epcList`) hash identically to
+            // unprefixed ones; non-EPCIS namespaces pass through untouched.
+            sb.push_str(name_stripped);
         }
 
         let current_parent = if self.name.is_none() { parent_name } else { self.name.as_deref() };
@@ -1636,7 +1650,9 @@ pub fn canonicalize_xml(xml_str: &str, is_cbv_2_0: bool) -> Result<String, Epcis
 
     let mut prehashes = vec![];
     for mut event_node in event_nodes {
-        let type_val = event_node.name.clone().ok_or(EpcisHashError::MissingField { field: "eventType" })?;
+        let type_val = event_node.name.as_deref()
+            .map(|n| strip_epcis_namespace(n).to_string())
+            .ok_or(EpcisHashError::MissingField { field: "eventType" })?;
         event_node.name = None;
         let bubbled = event_node.bubble_up_bare_extensions(None);
         event_node.children.extend(bubbled);
@@ -1814,6 +1830,26 @@ mod unit_tests {
     fn test_normalize_numeric_non_number_passthrough() {
         assert_eq!(normalize_numeric("abc"), "abc");
         assert_eq!(normalize_numeric(""), "");
+    }
+
+    #[test]
+    fn test_normalize_numeric_matches_reference_float_semantics() {
+        // The reference implementation routes numerics through a 64-bit float,
+        // so values above 2^53 round — reproducing that exactly is required
+        // for hash interoperability (SensorDataExamples.xml relies on it).
+        assert_eq!(normalize_numeric("9007199254740993"), "9007199254740992");
+        assert_eq!(
+            normalize_numeric("111100001111000011110000"),
+            "111100001111000003641344"
+        );
+    }
+
+    #[test]
+    fn test_normalize_numeric_inf_nan_passthrough() {
+        // f64::from_str accepts these, but they are text in EPCIS terms
+        assert_eq!(normalize_numeric("inf"), "inf");
+        assert_eq!(normalize_numeric("NaN"), "NaN");
+        assert_eq!(normalize_numeric("-infinity"), "-infinity");
     }
 
     // ── URI normalisation ─────────────────────────────────────────────────────
