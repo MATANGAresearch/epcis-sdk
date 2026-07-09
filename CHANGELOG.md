@@ -95,8 +95,7 @@ or canonical hashes, hence the minor version bump.
   standard EPCIS 2.0 XML with XSD-ordered event children. The previous
   internal quick-xml round-trip format is gone. Verified against every
   official XML test vector: parsing to typed models and re-serializing both
-  preserve the exact canonical pre-hash. Known limitation: `EPCISHeader`
-  master data in XML form is not yet mapped.
+  preserve the exact canonical pre-hash.
 - `ReadPoint`, `BizLocation`, `SensorElement`, and `ErrorDeclaration` gained
   flattened `extensions` maps (the spec permits extension elements inside
   all four), so such fields survive typed round-trips.
