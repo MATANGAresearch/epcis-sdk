@@ -9,7 +9,7 @@ members = [
 
 [workspace.package]
 version = "0.2.0"
-rust-version = "1.96.1"
+rust-version = "1.88"
 authors = ["Duma Mtungwa <duma@matangaresearch.com>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -21,8 +21,6 @@ serde_json = { version = "1.0.150", features = ["preserve_order"] }
 chrono = { version = "0.4.45", features = ["serde"] }
 strum = { version = "0.28.0", features = ["derive"] }
 strum_macros = { version = "0.28.0" }
-url = { version = "2.5.8", features = ["serde"] }
-uuid = { version = "1.23.4", features = ["serde", "v4"] }
 sha2 = { version = "0.11.0" }
 quick-xml = { version = "0.41.0", features = ["serialize"] }
 regex = { version = "1.12.4" }

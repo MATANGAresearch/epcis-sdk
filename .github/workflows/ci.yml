@@ -17,6 +17,16 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Fetch reference test vectors
+      # The compliance suite (test_standard_vectors and related tests) reads
+      # the official GS1/OpenEPCIS vectors from research-repos/, which is
+      # gitignored locally and must be cloned in CI.
+      # Pinned to the commit the suite was validated against for
+      # reproducibility; bump deliberately when refreshing vectors.
+      run: |
+        git clone https://github.com/RalphTro/epcis-event-hash-generator.git research-repos/epcis-python
+        git -C research-repos/epcis-python checkout 5d2f1c389a1599af40fe1b530b62e0ca59ab818f
+
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
       with:
@@ -32,7 +42,33 @@ jobs:
       run: cargo fmt --all -- --check
 
     - name: Run clippy linter
-      run: cargo clippy --all-targets -- -D warnings
+      run: cargo clippy --workspace --all-targets -- -D warnings
 
     - name: Run tests
       run: cargo test --workspace
+
+    - name: Build WASM feature
+      run: |
+        cargo build -p epcis-translate --features wasm
+        cargo build -p epcis-hash --features wasm
+
+    - name: Check benchmarks compile
+      run: cargo bench --no-run
+
+  msrv:
+    name: MSRV (1.88)
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Rust 1.88
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: "1.88"
+
+    - name: Cache dependencies
+      uses: swatinem/rust-cache@v2
+
+    - name: Check workspace on MSRV
+      run: cargo check --workspace --all-targets
